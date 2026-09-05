@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/soham/ai-website-database/app/dashboard/page.tsx"],"sourcesContent":["\"use client\";\r\n\r\nimport { App } from \"@/src/App\";\r\nimport { AppProvider } from \"@/src/context/AppContext\";\r\n\r\nexport default function DashboardPage() {\r\n  return (\r\n    <AppProvider>\r\n      <App />\r\n    </AppProvider>\r\n  );\r\n}"],"names":["DashboardPage"],"mappings":";;;;;AAEA;AACA;AAHA;;;;AAKe,SAASA;IACtB,qBACE,8OAAC,4IAAW;kBACV,cAAA,8OAAC,kHAAG;;;;;;;;;;AAGV"}},
+    {"offset": {"line": 32, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/soham/ai-website-database/lib/supabase.js"],"sourcesContent":["import { createBrowserClient } from '@supabase/ssr'\r\n\r\nexport const supabase = createBrowserClient(\r\n  process.env.NEXT_PUBLIC_SUPABASE_URL,\r\n  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\r\n)"],"names":["supabase"],"mappings":";;;;AAAA;AAAA;;AAEO,MAAMA,WAAW,IAAA,iMAAmB"}}]
+}
