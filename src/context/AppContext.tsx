@@ -78,6 +78,7 @@ interface AppContextType {
   cpses: CPSE[];
   commonMaterials: CommonMaterial[];
   materials: DatabaseMaterial[];
+  materialsLoading: boolean;
   candidates: MatchCandidate[];
   reviews: ReviewItem[];
   qualityIssues: QualityIssue[];
@@ -172,19 +173,22 @@ export const AppProvider: React.FC<{
 
   /* =======================================================
      DATA COLLECTIONS
-
-     IMPORTANT:
-     commonMaterials is now EMPTY.
-     We no longer use INITIAL_COMMON_MATERIALS.
   ======================================================= */
 
   const [cpses, setCpses] =
     useState<CPSE[]>(INITIAL_CPSES);
 
+  /*
+    commonMaterials is kept empty because the material catalog
+    now comes directly from the real Supabase materials table.
+  */
   const [commonMaterials, setCommonMaterials] =
     useState<CommonMaterial[]>([]);
 
-  /* REAL DATABASE MATERIALS */
+
+  /* =======================================================
+     REAL DATABASE MATERIALS
+  ======================================================= */
 
   const [materials, setMaterials] =
     useState<DatabaseMaterial[]>([]);
@@ -193,9 +197,9 @@ export const AppProvider: React.FC<{
     useState(true);
 
 
-  /* Existing non-material collections
-     are temporarily retained so existing pages
-     continue working while we migrate them. */
+  /* =======================================================
+     EXISTING NON-MATERIAL COLLECTIONS
+  ======================================================= */
 
   const [candidates, setCandidates] =
     useState<MatchCandidate[]>(INITIAL_CANDIDATES);
@@ -232,9 +236,6 @@ export const AppProvider: React.FC<{
 
   /* =======================================================
      SELECTION STATES
-
-     Removed fake default:
-     BMG-FST-000001284
   ======================================================= */
 
   const [selectedMaterialId, setSelectedMaterialId] =
@@ -301,12 +302,17 @@ export const AppProvider: React.FC<{
         handleKeyDown
       );
     };
-
   }, []);
 
 
   /* =======================================================
-     LOAD REAL MATERIAL DATA FROM SUPABASE
+     LOAD ALL REAL MATERIAL DATA FROM SUPABASE
+
+     Supabase/PostgREST commonly limits a request to 1000 rows.
+     Your database currently has more than 1000 records.
+
+     Therefore we load the table in pages of 1000 using .range()
+     until the final page contains fewer than 1000 records.
   ======================================================= */
 
   useEffect(() => {
@@ -315,41 +321,124 @@ export const AppProvider: React.FC<{
 
       setMaterialsLoading(true);
 
-      const {
-        data,
-        error
-      } = await supabase
-        .from('materials')
-        .select('*')
-        .order('id', {
-          ascending: true
+      try {
+
+        const pageSize = 1000;
+        let from = 0;
+
+        const allMaterials: DatabaseMaterial[] = [];
+
+        while (true) {
+
+          const to = from + pageSize - 1;
+
+          const {
+            data,
+            error
+          } = await supabase
+            .from('materials')
+            .select(
+              'id, company, material_number, description, specifications, category'
+            )
+            .order('id', {
+              ascending: true
+            })
+            .range(from, to);
+
+
+          if (error) {
+
+            console.error(
+              'Failed to load materials:',
+              error
+            );
+
+            setMaterials([]);
+
+            break;
+          }
+
+
+          const currentPage =
+            (data || []) as DatabaseMaterial[];
+
+
+          allMaterials.push(
+            ...currentPage
+          );
+
+
+          console.log(
+            `Loaded page starting at ${from}: ${currentPage.length} records`
+          );
+
+
+          /*
+            If this page contains fewer than 1000 records,
+            we have reached the end of the table.
+          */
+          if (
+            currentPage.length < pageSize
+          ) {
+            break;
+          }
+
+
+          from += pageSize;
+        }
+
+
+        setMaterials(
+          allMaterials
+        );
+
+
+        console.log(
+          `Total materials loaded from Supabase: ${allMaterials.length}`
+        );
+
+
+        /*
+          Helpful company breakdown in browser console.
+        */
+        const companyCounts: Record<string, number> = {};
+
+        allMaterials.forEach(material => {
+
+          const company =
+            material.company
+              ?.trim()
+              .toUpperCase();
+
+          if (!company) {
+            return;
+          }
+
+          companyCounts[company] =
+            (companyCounts[company] || 0) + 1;
         });
 
-      if (error) {
+
+        console.log(
+          'Company material counts:',
+          companyCounts
+        );
+
+      } catch (error) {
 
         console.error(
-          'Failed to load materials:',
+          'Unexpected error while loading materials:',
           error
         );
 
         setMaterials([]);
 
+      } finally {
+
         setMaterialsLoading(false);
-
-        return;
       }
-
-      const loadedMaterials =
-        (data || []) as DatabaseMaterial[];
-
-      setMaterials(loadedMaterials);
-
-      console.log(
-        `Loaded ${loadedMaterials.length} materials from Supabase`
-      );
-
-      setMaterialsLoading(false);
     };
+
 
     loadMaterials();
 
@@ -358,17 +447,6 @@ export const AppProvider: React.FC<{
 
   /* =======================================================
      UPDATE CPSE MATERIAL COUNTS FROM REAL DATABASE
-
-     Only recordsUploaded is derived from Supabase.
-
-     We do NOT invent:
-     - normalized records
-     - matched records
-     - review backlog
-     - quality score
-     - completeness score
-
-     Those become 0 unless actual data exists.
   ======================================================= */
 
   useEffect(() => {
@@ -406,30 +484,40 @@ export const AppProvider: React.FC<{
         const actualMaterialCount =
           companyCounts[code] || 0;
 
+
         return {
           ...cpse,
 
-          /* REAL */
-          recordsUploaded: actualMaterialCount,
+          recordsUploaded:
+            actualMaterialCount,
 
-          /* No real database source yet */
-          recordsNormalized: 0,
-          recordsMatched: 0,
-          reviewBacklog: 0,
+          recordsNormalized:
+            0,
 
-          /* No real quality data yet */
-          qualityScore: 0,
-          completenessRate: 0,
+          recordsMatched:
+            0,
 
-          /* Don't claim an upload date when we don't have one */
-          lastUpload: actualMaterialCount > 0
-            ? 'Material database connected'
-            : 'No material data available'
+          reviewBacklog:
+            0,
+
+          qualityScore:
+            0,
+
+          completenessRate:
+            0,
+
+          lastUpload:
+            actualMaterialCount > 0
+              ? 'Material database connected'
+              : 'No material data available'
         };
       })
     );
 
-  }, [materials, materialsLoading]);
+  }, [
+    materials,
+    materialsLoading
+  ]);
 
 
   /* =======================================================
@@ -446,15 +534,18 @@ export const AppProvider: React.FC<{
         .toString(36)
         .substring(2, 9);
 
+
     const newToast: ToastMessage = {
       ...toast,
       id
     };
 
+
     setToasts(prev => [
       ...prev,
       newToast
     ]);
+
 
     setTimeout(() => {
       removeToast(id);
@@ -462,7 +553,9 @@ export const AppProvider: React.FC<{
   };
 
 
-  const removeToast = (id: string) => {
+  const removeToast = (
+    id: string
+  ) => {
 
     setToasts(prev =>
       prev.filter(
@@ -501,9 +594,13 @@ export const AppProvider: React.FC<{
     bmgId: string
   ) => {
 
-    setSelectedMaterialId(bmgId);
+    setSelectedMaterialId(
+      bmgId
+    );
 
-    setCurrentTab('material-360');
+    setCurrentTab(
+      'material-360'
+    );
   };
 
 
@@ -515,9 +612,13 @@ export const AppProvider: React.FC<{
     candidateId: string
   ) => {
 
-    setSelectedCandidateId(candidateId);
+    setSelectedCandidateId(
+      candidateId
+    );
 
-    setCurrentTab('ai-match');
+    setCurrentTab(
+      'ai-match'
+    );
   };
 
 
@@ -545,7 +646,8 @@ export const AppProvider: React.FC<{
         candidateItem.id === candidateId
           ? {
               ...candidateItem,
-              status: 'Approved'
+              status:
+                'Approved'
             }
           : candidateItem
       )
@@ -557,7 +659,9 @@ export const AppProvider: React.FC<{
         review.candidateId === candidateId
           ? {
               ...review,
-              status: 'Approved',
+
+              status:
+                'Approved',
 
               actionNote:
                 note ||
@@ -591,7 +695,8 @@ export const AppProvider: React.FC<{
         'AUD-' +
         Math.floor(
           1000 +
-          Math.random() * 9000
+          Math.random() *
+            9000
         ),
 
       timestamp:
@@ -642,12 +747,6 @@ export const AppProvider: React.FC<{
     ]);
 
 
-    /*
-      We no longer fabricate CPSE matched counts.
-      recordsMatched will remain based on actual data.
-    */
-
-
     addToast({
 
       title:
@@ -686,7 +785,8 @@ export const AppProvider: React.FC<{
         candidateItem.id === candidateId
           ? {
               ...candidateItem,
-              status: 'Rejected'
+              status:
+                'Rejected'
             }
           : candidateItem
       )
@@ -729,7 +829,8 @@ export const AppProvider: React.FC<{
         'AUD-' +
         Math.floor(
           1000 +
-          Math.random() * 9000
+          Math.random() *
+            9000
         ),
 
       timestamp:
@@ -911,10 +1012,6 @@ export const AppProvider: React.FC<{
 
   /* =======================================================
      CREATE COMMON MATERIAL
-     
-     NOTE:
-     New common materials are kept locally for now.
-     They are NOT presented as real Supabase records.
   ======================================================= */
 
   const createCommonMaterial = (
@@ -977,7 +1074,8 @@ export const AppProvider: React.FC<{
         currentUserRole,
 
       approvedAt:
-        new Date().toISOString()
+        new Date()
+          .toISOString()
           .split('T')[0],
 
       totalAnnualDemand:
@@ -1068,7 +1166,8 @@ export const AppProvider: React.FC<{
         'AUD-' +
         Math.floor(
           1000 +
-          Math.random() * 9000
+          Math.random() *
+            9000
         ),
 
       timestamp:
@@ -1149,7 +1248,6 @@ export const AppProvider: React.FC<{
   ======================================================= */
 
   return (
-
     <AppContext.Provider
       value={{
 
@@ -1167,6 +1265,8 @@ export const AppProvider: React.FC<{
         commonMaterials,
 
         materials,
+
+        materialsLoading,
 
         candidates,
 
@@ -1243,9 +1343,7 @@ export const AppProvider: React.FC<{
         openCandidateMatch
       }}
     >
-
       {children}
-
     </AppContext.Provider>
   );
 };
