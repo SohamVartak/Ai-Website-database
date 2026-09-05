@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect
+} from 'react';
+
 import {
   TabType,
   UserRole,
@@ -14,9 +20,9 @@ import {
   AIModelVersion,
   NotificationItem
 } from '../types';
+
 import {
   INITIAL_CPSES,
-  INITIAL_COMMON_MATERIALS,
   INITIAL_CANDIDATES,
   INITIAL_REVIEWS,
   INITIAL_QUALITY_ISSUES,
@@ -27,7 +33,12 @@ import {
   INITIAL_AI_MODELS,
   INITIAL_NOTIFICATIONS
 } from '../data/mockData';
+
 import { supabase } from '../../lib/supabase';
+
+/* =========================================================
+   DATABASE MATERIAL
+========================================================= */
 
 export interface DatabaseMaterial {
   id: number;
@@ -38,6 +49,10 @@ export interface DatabaseMaterial {
   category: string | null;
 }
 
+/* =========================================================
+   TOAST
+========================================================= */
+
 export interface ToastMessage {
   id: string;
   title: string;
@@ -45,15 +60,21 @@ export interface ToastMessage {
   type: 'success' | 'error' | 'warning' | 'info';
 }
 
+/* =========================================================
+   APP CONTEXT TYPE
+========================================================= */
+
 interface AppContextType {
   currentTab: TabType;
   setCurrentTab: (tab: TabType) => void;
+
   currentUserRole: UserRole;
   setCurrentUserRole: (role: UserRole) => void;
+
   language: 'EN' | 'HI';
   setLanguage: (lang: 'EN' | 'HI') => void;
 
-  // Data entities
+  /* Data entities */
   cpses: CPSE[];
   commonMaterials: CommonMaterial[];
   materials: DatabaseMaterial[];
@@ -68,579 +89,1182 @@ interface AppContextType {
   notifications: NotificationItem[];
   toasts: ToastMessage[];
 
-  // Navigation & selection states
+  /* Navigation & selection */
   selectedMaterialId: string | null;
   setSelectedMaterialId: (id: string | null) => void;
+
   selectedCandidateId: string | null;
   setSelectedCandidateId: (id: string | null) => void;
+
   selectedCPSEId: string | null;
   setSelectedCPSEId: (id: string | null) => void;
+
   selectedOpportunityId: string | null;
   setSelectedOpportunityId: (id: string | null) => void;
+
   selectedIssueId: string | null;
   setSelectedIssueId: (id: string | null) => void;
 
-  // Drawers & Modals
+  /* Drawers & Modals */
   isCommandPaletteOpen: boolean;
   setIsCommandPaletteOpen: (open: boolean) => void;
+
   isNotificationsOpen: boolean;
   setIsNotificationsOpen: (open: boolean) => void;
+
   isAIAssistantOpen: boolean;
   setIsAIAssistantOpen: (open: boolean) => void;
+
   isSIHDemoOpen: boolean;
   setIsSIHDemoOpen: (open: boolean) => void;
+
   demoStep: number;
   setDemoStep: (step: number) => void;
 
-  // Actions
+  /* Actions */
   approveMatch: (candidateId: string, note?: string) => void;
   rejectMatch: (candidateId: string, reason?: string) => void;
   requestMoreData: (candidateId: string, note?: string) => void;
   deferMatch: (candidateId: string) => void;
+
   createCommonMaterial: (material: Partial<CommonMaterial>) => void;
+
   executeCleanupRule: (issueId: string) => void;
+
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   removeToast: (id: string) => void;
+
   markNotificationAsRead: (id: string) => void;
+
   startSIHDemo: () => void;
+
   openMaterial360: (bmgId: string) => void;
   openCandidateMatch: (candidateId: string) => void;
 }
 
+/* =========================================================
+   CONTEXT
+========================================================= */
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentTab, setCurrentTab] = useState<TabType>('home');
-  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('National Administrator');
-  const [language, setLanguage] = useState<'EN' | 'HI'>('EN');
+/* =========================================================
+   PROVIDER
+========================================================= */
 
-  // Core Data Collections
-  const [cpses, setCpses] = useState<CPSE[]>(INITIAL_CPSES);
-  const [commonMaterials, setCommonMaterials] = useState<CommonMaterial[]>(INITIAL_COMMON_MATERIALS);
+export const AppProvider: React.FC<{
+  children: React.ReactNode;
+}> = ({ children }) => {
 
-  // Real materials loaded from Supabase
-  const [materials, setMaterials] = useState<DatabaseMaterial[]>([]);
-  const [materialsLoading, setMaterialsLoading] = useState(true);
+  /* =======================================================
+     BASIC APP STATE
+  ======================================================= */
 
-  const [candidates, setCandidates] = useState<MatchCandidate[]>(INITIAL_CANDIDATES);
-  const [reviews, setReviews] = useState<ReviewItem[]>(INITIAL_REVIEWS);
-  const [qualityIssues, setQualityIssues] = useState<QualityIssue[]>(INITIAL_QUALITY_ISSUES);
-  const [procurementOpportunities, setProcurementOpportunities] = useState<ProcurementOpportunity[]>(INITIAL_PROCUREMENT_OPPORTUNITIES);
-  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>(INITIAL_AUDIT_EVENTS);
-  const [rules, setRules] = useState<StandardizationRule[]>(INITIAL_RULES);
-  const [dictionary, setDictionary] = useState<DomainDictionaryItem[]>(INITIAL_DICTIONARY);
-  const [models, setModels] = useState<AIModelVersion[]>(INITIAL_AI_MODELS);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [currentTab, setCurrentTab] =
+    useState<TabType>('home');
 
-  // Selection states
-  const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>('BMG-FST-000001284');
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>('CAND-8492');
-  const [selectedCPSEId, setSelectedCPSEId] = useState<string | null>(null);
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>('OPP-1042');
-  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] =
+    useState<UserRole>('National Administrator');
 
-  // Modals & Overlays
-  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
-  const [isAIAssistantOpen, setIsAIAssistantOpen] = useState<boolean>(false);
-  const [isSIHDemoOpen, setIsSIHDemoOpen] = useState<boolean>(false);
-  const [demoStep, setDemoStep] = useState<number>(0);
+  const [language, setLanguage] =
+    useState<'EN' | 'HI'>('EN');
 
-  // Keyboard shortcut Ctrl+K for Global Command Palette
+
+  /* =======================================================
+     DATA COLLECTIONS
+
+     IMPORTANT:
+     commonMaterials is now EMPTY.
+     We no longer use INITIAL_COMMON_MATERIALS.
+  ======================================================= */
+
+  const [cpses, setCpses] =
+    useState<CPSE[]>(INITIAL_CPSES);
+
+  const [commonMaterials, setCommonMaterials] =
+    useState<CommonMaterial[]>([]);
+
+  /* REAL DATABASE MATERIALS */
+
+  const [materials, setMaterials] =
+    useState<DatabaseMaterial[]>([]);
+
+  const [materialsLoading, setMaterialsLoading] =
+    useState(true);
+
+
+  /* Existing non-material collections
+     are temporarily retained so existing pages
+     continue working while we migrate them. */
+
+  const [candidates, setCandidates] =
+    useState<MatchCandidate[]>(INITIAL_CANDIDATES);
+
+  const [reviews, setReviews] =
+    useState<ReviewItem[]>(INITIAL_REVIEWS);
+
+  const [qualityIssues, setQualityIssues] =
+    useState<QualityIssue[]>(INITIAL_QUALITY_ISSUES);
+
+  const [procurementOpportunities, setProcurementOpportunities] =
+    useState<ProcurementOpportunity[]>(
+      INITIAL_PROCUREMENT_OPPORTUNITIES
+    );
+
+  const [auditEvents, setAuditEvents] =
+    useState<AuditEvent[]>(INITIAL_AUDIT_EVENTS);
+
+  const [rules, setRules] =
+    useState<StandardizationRule[]>(INITIAL_RULES);
+
+  const [dictionary, setDictionary] =
+    useState<DomainDictionaryItem[]>(INITIAL_DICTIONARY);
+
+  const [models, setModels] =
+    useState<AIModelVersion[]>(INITIAL_AI_MODELS);
+
+  const [notifications, setNotifications] =
+    useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+
+  const [toasts, setToasts] =
+    useState<ToastMessage[]>([]);
+
+
+  /* =======================================================
+     SELECTION STATES
+
+     Removed fake default:
+     BMG-FST-000001284
+  ======================================================= */
+
+  const [selectedMaterialId, setSelectedMaterialId] =
+    useState<string | null>(null);
+
+  const [selectedCandidateId, setSelectedCandidateId] =
+    useState<string | null>('CAND-8492');
+
+  const [selectedCPSEId, setSelectedCPSEId] =
+    useState<string | null>(null);
+
+  const [selectedOpportunityId, setSelectedOpportunityId] =
+    useState<string | null>('OPP-1042');
+
+  const [selectedIssueId, setSelectedIssueId] =
+    useState<string | null>(null);
+
+
+  /* =======================================================
+     MODALS / OVERLAYS
+  ======================================================= */
+
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] =
+    useState<boolean>(false);
+
+  const [isNotificationsOpen, setIsNotificationsOpen] =
+    useState<boolean>(false);
+
+  const [isAIAssistantOpen, setIsAIAssistantOpen] =
+    useState<boolean>(false);
+
+  const [isSIHDemoOpen, setIsSIHDemoOpen] =
+    useState<boolean>(false);
+
+  const [demoStep, setDemoStep] =
+    useState<number>(0);
+
+
+  /* =======================================================
+     CTRL + K COMMAND PALETTE
+  ======================================================= */
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.key.toLowerCase() === 'k'
+      ) {
         e.preventDefault();
+
         setIsCommandPaletteOpen(prev => !prev);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener(
+      'keydown',
+      handleKeyDown
+    );
+
+    return () => {
+      window.removeEventListener(
+        'keydown',
+        handleKeyDown
+      );
+    };
+
   }, []);
 
-  // Load real material data from Supabase
+
+  /* =======================================================
+     LOAD REAL MATERIAL DATA FROM SUPABASE
+  ======================================================= */
+
   useEffect(() => {
+
     const loadMaterials = async () => {
+
       setMaterialsLoading(true);
 
-      const { data, error } = await supabase
+      const {
+        data,
+        error
+      } = await supabase
         .from('materials')
         .select('*')
-        .order('id', { ascending: true });
+        .order('id', {
+          ascending: true
+        });
 
       if (error) {
-        console.error('Failed to load materials:', error);
+
+        console.error(
+          'Failed to load materials:',
+          error
+        );
+
         setMaterials([]);
-      } else {
-        setMaterials(data || []);
-        console.log(`Loaded ${data?.length || 0} materials from Supabase`);
+
+        setMaterialsLoading(false);
+
+        return;
       }
+
+      const loadedMaterials =
+        (data || []) as DatabaseMaterial[];
+
+      setMaterials(loadedMaterials);
+
+      console.log(
+        `Loaded ${loadedMaterials.length} materials from Supabase`
+      );
 
       setMaterialsLoading(false);
     };
 
     loadMaterials();
+
   }, []);
 
-  const addToast = (toast: Omit<ToastMessage, 'id'>) => {
-    const id = 'toast-' + Math.random().toString(36).substring(2, 9);
-    const newToast: ToastMessage = { ...toast, id };
 
-    setToasts(prev => [...prev, newToast]);
+  /* =======================================================
+     UPDATE CPSE MATERIAL COUNTS FROM REAL DATABASE
+
+     Only recordsUploaded is derived from Supabase.
+
+     We do NOT invent:
+     - normalized records
+     - matched records
+     - review backlog
+     - quality score
+     - completeness score
+
+     Those become 0 unless actual data exists.
+  ======================================================= */
+
+  useEffect(() => {
+
+    if (materialsLoading) {
+      return;
+    }
+
+    const companyCounts: Record<string, number> = {};
+
+    materials.forEach(material => {
+
+      const company =
+        material.company
+          ?.trim()
+          .toUpperCase();
+
+      if (!company) {
+        return;
+      }
+
+      companyCounts[company] =
+        (companyCounts[company] || 0) + 1;
+    });
+
+
+    setCpses(prevCpses =>
+      prevCpses.map(cpse => {
+
+        const code =
+          cpse.code
+            ?.trim()
+            .toUpperCase();
+
+        const actualMaterialCount =
+          companyCounts[code] || 0;
+
+        return {
+          ...cpse,
+
+          /* REAL */
+          recordsUploaded: actualMaterialCount,
+
+          /* No real database source yet */
+          recordsNormalized: 0,
+          recordsMatched: 0,
+          reviewBacklog: 0,
+
+          /* No real quality data yet */
+          qualityScore: 0,
+          completenessRate: 0,
+
+          /* Don't claim an upload date when we don't have one */
+          lastUpload: actualMaterialCount > 0
+            ? 'Material database connected'
+            : 'No material data available'
+        };
+      })
+    );
+
+  }, [materials, materialsLoading]);
+
+
+  /* =======================================================
+     TOAST FUNCTIONS
+  ======================================================= */
+
+  const addToast = (
+    toast: Omit<ToastMessage, 'id'>
+  ) => {
+
+    const id =
+      'toast-' +
+      Math.random()
+        .toString(36)
+        .substring(2, 9);
+
+    const newToast: ToastMessage = {
+      ...toast,
+      id
+    };
+
+    setToasts(prev => [
+      ...prev,
+      newToast
+    ]);
 
     setTimeout(() => {
       removeToast(id);
     }, 4500);
   };
 
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
 
-  const markNotificationAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
+  const removeToast = (id: string) => {
+
+    setToasts(prev =>
+      prev.filter(
+        toast => toast.id !== id
+      )
     );
   };
 
-  const openMaterial360 = (bmgId: string) => {
+
+  /* =======================================================
+     NOTIFICATIONS
+  ======================================================= */
+
+  const markNotificationAsRead = (
+    id: string
+  ) => {
+
+    setNotifications(prev =>
+      prev.map(notification =>
+        notification.id === id
+          ? {
+              ...notification,
+              read: true
+            }
+          : notification
+      )
+    );
+  };
+
+
+  /* =======================================================
+     MATERIAL 360 NAVIGATION
+  ======================================================= */
+
+  const openMaterial360 = (
+    bmgId: string
+  ) => {
+
     setSelectedMaterialId(bmgId);
+
     setCurrentTab('material-360');
   };
 
-  const openCandidateMatch = (candidateId: string) => {
+
+  /* =======================================================
+     AI MATCH NAVIGATION
+  ======================================================= */
+
+  const openCandidateMatch = (
+    candidateId: string
+  ) => {
+
     setSelectedCandidateId(candidateId);
+
     setCurrentTab('ai-match');
   };
 
-  // Action: Approve Match
-  const approveMatch = (candidateId: string, note?: string) => {
-    const candidate = candidates.find(c => c.id === candidateId);
-    if (!candidate) return;
 
-    // Update candidate status
+  /* =======================================================
+     APPROVE MATCH
+  ======================================================= */
+
+  const approveMatch = (
+    candidateId: string,
+    note?: string
+  ) => {
+
+    const candidate =
+      candidates.find(
+        c => c.id === candidateId
+      );
+
+    if (!candidate) {
+      return;
+    }
+
+
     setCandidates(prev =>
-      prev.map(c =>
-        c.id === candidateId
-          ? { ...c, status: 'Approved' }
-          : c
-      )
-    );
-
-    // Update review queue item
-    setReviews(prev =>
-      prev.map(r =>
-        r.candidateId === candidateId
+      prev.map(candidateItem =>
+        candidateItem.id === candidateId
           ? {
-              ...r,
-              status: 'Approved',
-              actionNote: note || 'Approved by Officer. Common Material Identity mapped.',
-              actionTakenBy: currentUserRole,
-              actionTakenAt:
-                new Date().toLocaleString('en-IN', {
-                  timeZone: 'Asia/Kolkata'
-                }) + ' IST'
+              ...candidateItem,
+              status: 'Approved'
             }
-          : r
+          : candidateItem
       )
     );
 
-    // Target or minted BMG ID
-    const targetBmgId = candidate.targetBmgId || 'BMG-FST-000001284';
 
-    // Add audit event
+    setReviews(prev =>
+      prev.map(review =>
+        review.candidateId === candidateId
+          ? {
+              ...review,
+              status: 'Approved',
+
+              actionNote:
+                note ||
+                'Approved by Officer. Common Material Identity mapped.',
+
+              actionTakenBy:
+                currentUserRole,
+
+              actionTakenAt:
+                new Date().toLocaleString(
+                  'en-IN',
+                  {
+                    timeZone:
+                      'Asia/Kolkata'
+                  }
+                ) + ' IST'
+            }
+          : review
+      )
+    );
+
+
+    const targetBmgId =
+      candidate.targetBmgId ||
+      'UNASSIGNED';
+
+
     const newAudit: AuditEvent = {
-      id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
+
+      id:
+        'AUD-' +
+        Math.floor(
+          1000 +
+          Math.random() * 9000
+        ),
+
       timestamp:
-        new Date().toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata'
-        }) + ' IST',
-      user: currentUserRole,
-      userRole: currentUserRole,
-      cpse: `${candidate.recordA.cpseCode} / ${candidate.recordB.cpseCode}`,
-      action: 'Material mapping approved',
-      materialId: targetBmgId,
-      previousValue: `Candidate Pair #${candidate.pairNumber} (Pending Review)`,
-      newValue: `Approved Standard Mapping to ${targetBmgId}`,
+        new Date().toLocaleString(
+          'en-IN',
+          {
+            timeZone:
+              'Asia/Kolkata'
+          }
+        ) + ' IST',
+
+      user:
+        currentUserRole,
+
+      userRole:
+        currentUserRole,
+
+      cpse:
+        `${candidate.recordA.cpseCode} / ${candidate.recordB.cpseCode}`,
+
+      action:
+        'Material mapping approved',
+
+      materialId:
+        targetBmgId,
+
+      previousValue:
+        `Candidate Pair #${candidate.pairNumber} (Pending Review)`,
+
+      newValue:
+        `Approved Standard Mapping to ${targetBmgId}`,
+
       reason:
         note ||
         `Verified engineering equivalence with ${candidate.scores.overallConfidence}% confidence score.`,
-      modelVersion: candidate.modelVersion,
+
+      modelVersion:
+        candidate.modelVersion,
+
       verificationHash:
-        'sha256:' +
-        Array.from({ length: 64 }, () =>
-          Math.floor(Math.random() * 16).toString(16)
-        ).join('')
+        'NOT_AVAILABLE'
     };
 
-    setAuditEvents(prev => [newAudit, ...prev]);
 
-    // Update CPSE stats
-    setCpses(prev =>
-      prev.map(cpse => {
-        if (
-          cpse.code === candidate.recordA.cpseCode ||
-          cpse.code === candidate.recordB.cpseCode
-        ) {
-          return {
-            ...cpse,
-            recordsMatched: cpse.recordsMatched + 1,
-            reviewBacklog: Math.max(0, cpse.reviewBacklog - 1)
-          };
-        }
+    setAuditEvents(prev => [
+      newAudit,
+      ...prev
+    ]);
 
-        return cpse;
-      })
-    );
+
+    /*
+      We no longer fabricate CPSE matched counts.
+      recordsMatched will remain based on actual data.
+    */
+
 
     addToast({
-      title: 'Candidate Match Approved',
-      message: `Standardized ${candidate.recordA.localCode} & ${candidate.recordB.localCode} into ${targetBmgId}.`,
-      type: 'success'
+
+      title:
+        'Candidate Match Approved',
+
+      message:
+        `Standardized ${candidate.recordA.localCode} & ${candidate.recordB.localCode}.`,
+
+      type:
+        'success'
     });
   };
 
-  // Action: Reject Match
-  const rejectMatch = (candidateId: string, reason?: string) => {
-    const candidate = candidates.find(c => c.id === candidateId);
-    if (!candidate) return;
+
+  /* =======================================================
+     REJECT MATCH
+  ======================================================= */
+
+  const rejectMatch = (
+    candidateId: string,
+    reason?: string
+  ) => {
+
+    const candidate =
+      candidates.find(
+        c => c.id === candidateId
+      );
+
+    if (!candidate) {
+      return;
+    }
+
 
     setCandidates(prev =>
-      prev.map(c =>
-        c.id === candidateId
-          ? { ...c, status: 'Rejected' }
-          : c
+      prev.map(candidateItem =>
+        candidateItem.id === candidateId
+          ? {
+              ...candidateItem,
+              status: 'Rejected'
+            }
+          : candidateItem
       )
     );
 
+
     setReviews(prev =>
-      prev.map(r =>
-        r.candidateId === candidateId
+      prev.map(review =>
+        review.candidateId === candidateId
           ? {
-              ...r,
-              status: 'Rejected',
+              ...review,
+
+              status:
+                'Rejected',
+
               actionNote:
                 reason ||
                 'Rejected due to engineering specification divergence.',
-              actionTakenBy: currentUserRole,
+
+              actionTakenBy:
+                currentUserRole,
+
               actionTakenAt:
-                new Date().toLocaleString('en-IN', {
-                  timeZone: 'Asia/Kolkata'
-                }) + ' IST'
+                new Date().toLocaleString(
+                  'en-IN',
+                  {
+                    timeZone:
+                      'Asia/Kolkata'
+                  }
+                ) + ' IST'
             }
-          : r
+          : review
       )
     );
 
+
     const newAudit: AuditEvent = {
-      id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
+
+      id:
+        'AUD-' +
+        Math.floor(
+          1000 +
+          Math.random() * 9000
+        ),
+
       timestamp:
-        new Date().toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata'
-        }) + ' IST',
-      user: currentUserRole,
-      userRole: currentUserRole,
-      cpse: `${candidate.recordA.cpseCode} / ${candidate.recordB.cpseCode}`,
-      action: 'Match rejected',
-      materialId: candidate.id,
-      previousValue: `Candidate Pair #${candidate.pairNumber}`,
-      newValue: 'Rejected - Preserved Discrete Inventory Identities',
+        new Date().toLocaleString(
+          'en-IN',
+          {
+            timeZone:
+              'Asia/Kolkata'
+          }
+        ) + ' IST',
+
+      user:
+        currentUserRole,
+
+      userRole:
+        currentUserRole,
+
+      cpse:
+        `${candidate.recordA.cpseCode} / ${candidate.recordB.cpseCode}`,
+
+      action:
+        'Match rejected',
+
+      materialId:
+        candidate.id,
+
+      previousValue:
+        `Candidate Pair #${candidate.pairNumber}`,
+
+      newValue:
+        'Rejected - Preserved Discrete Inventory Identities',
+
       reason:
         reason ||
         candidate.criticalMismatchReason ||
         'Specification mismatch detected by human officer.',
-      modelVersion: candidate.modelVersion,
+
+      modelVersion:
+        candidate.modelVersion,
+
       verificationHash:
-        'sha256:' +
-        Array.from({ length: 64 }, () =>
-          Math.floor(Math.random() * 16).toString(16)
-        ).join('')
+        'NOT_AVAILABLE'
     };
 
-    setAuditEvents(prev => [newAudit, ...prev]);
+
+    setAuditEvents(prev => [
+      newAudit,
+      ...prev
+    ]);
+
 
     addToast({
-      title: 'Match Candidate Rejected',
-      message: `Preserved separate identities for ${candidate.recordA.localCode} & ${candidate.recordB.localCode}.`,
-      type: 'warning'
+
+      title:
+        'Match Candidate Rejected',
+
+      message:
+        `Preserved separate identities for ${candidate.recordA.localCode} & ${candidate.recordB.localCode}.`,
+
+      type:
+        'warning'
     });
   };
 
-  // Action: Request More Data
-  const requestMoreData = (candidateId: string, note?: string) => {
+
+  /* =======================================================
+     REQUEST MORE DATA
+  ======================================================= */
+
+  const requestMoreData = (
+    candidateId: string,
+    note?: string
+  ) => {
+
     setCandidates(prev =>
-      prev.map(c =>
-        c.id === candidateId
-          ? { ...c, status: 'Needs More Data' }
-          : c
+      prev.map(candidate =>
+        candidate.id === candidateId
+          ? {
+              ...candidate,
+              status:
+                'Needs More Data'
+            }
+          : candidate
       )
     );
 
+
     setReviews(prev =>
-      prev.map(r =>
-        r.candidateId === candidateId
+      prev.map(review =>
+        review.candidateId === candidateId
           ? {
-              ...r,
-              status: 'Needs More Data',
+              ...review,
+
+              status:
+                'Needs More Data',
+
               actionNote:
                 note ||
-                'Dispatched clarification ticket to CPSE Nodal Master Data Officer.',
-              actionTakenBy: currentUserRole,
+                'Additional engineering data requested.',
+
+              actionTakenBy:
+                currentUserRole,
+
               actionTakenAt:
-                new Date().toLocaleString('en-IN', {
-                  timeZone: 'Asia/Kolkata'
-                }) + ' IST'
+                new Date().toLocaleString(
+                  'en-IN',
+                  {
+                    timeZone:
+                      'Asia/Kolkata'
+                  }
+                ) + ' IST'
             }
-          : r
+          : review
       )
     );
 
+
     addToast({
-      title: 'Clarification Requested',
+
+      title:
+        'Clarification Requested',
+
       message:
-        'Notification sent to CPSE Nodal Officers for additional engineering drawings / MTC.',
-      type: 'info'
+        'Additional engineering data requested.',
+
+      type:
+        'info'
     });
   };
 
-  // Action: Defer Match
-  const deferMatch = (candidateId: string) => {
+
+  /* =======================================================
+     DEFER MATCH
+  ======================================================= */
+
+  const deferMatch = (
+    candidateId: string
+  ) => {
+
     setCandidates(prev =>
-      prev.map(c =>
-        c.id === candidateId
-          ? { ...c, status: 'Deferred' }
-          : c
+      prev.map(candidate =>
+        candidate.id === candidateId
+          ? {
+              ...candidate,
+              status:
+                'Deferred'
+            }
+          : candidate
       )
     );
+
 
     setReviews(prev =>
-      prev.map(r =>
-        r.candidateId === candidateId
-          ? { ...r, status: 'Deferred' }
-          : r
+      prev.map(review =>
+        review.candidateId === candidateId
+          ? {
+              ...review,
+              status:
+                'Deferred'
+            }
+          : review
       )
     );
 
+
     addToast({
-      title: 'Review Deferred',
+
+      title:
+        'Review Deferred',
+
       message:
-        'Item moved to deferred queue for subsequent batch committee review.',
-      type: 'info'
+        'Item moved to deferred review.',
+
+      type:
+        'info'
     });
   };
 
-  // Action: Create Common Material
-  const createCommonMaterial = (material: Partial<CommonMaterial>) => {
-    const newId = `BMG-${material.category?.substring(0, 3).toUpperCase() || 'GEN'}-${Math.floor(
-      100000000 + Math.random() * 900000000
-    )}`;
+
+  /* =======================================================
+     CREATE COMMON MATERIAL
+     
+     NOTE:
+     New common materials are kept locally for now.
+     They are NOT presented as real Supabase records.
+  ======================================================= */
+
+  const createCommonMaterial = (
+    material: Partial<CommonMaterial>
+  ) => {
+
+    const newId =
+      `LOCAL-${Date.now()}`;
+
 
     const newMaterial: CommonMaterial = {
-      id: newId,
-      bmgCode: newId,
+
+      id:
+        newId,
+
+      bmgCode:
+        newId,
+
       standardName:
-        material.standardName || 'Standardized Engineering Material',
-      category: material.category || 'Fasteners',
-      specifications: material.specifications || {
-        material: 'Stainless Steel',
-        grade: 'Standard',
-        uom: 'Nos'
-      },
-      mappings: material.mappings || [],
-      status: 'Approved',
-      version: 'v1.0',
+        material.standardName ||
+        'Unassigned Material',
+
+      category:
+        material.category ||
+        'Uncategorized',
+
+      specifications:
+        material.specifications ||
+        {
+          material:
+            'Not Available',
+
+          grade:
+            'Not Available',
+
+          uom:
+            'Not Available'
+        },
+
+      mappings:
+        material.mappings ||
+        [],
+
+      status:
+        'Approved',
+
+      version:
+        'Local',
+
       lastUpdated:
-        new Date().toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata'
-        }) + ' IST',
-      approvedBy: currentUserRole,
-      approvedAt: new Date().toISOString().split('T')[0],
-      totalAnnualDemand: material.totalAnnualDemand || 15000,
-      avgUnitPrice: material.avgUnitPrice || 500,
-      potentialSavingsPercent: material.potentialSavingsPercent || 15.0,
-      activeSuppliersCount: material.activeSuppliersCount || 4,
-      authorizedInventory: material.authorizedInventory || 3000,
+        new Date().toLocaleString(
+          'en-IN',
+          {
+            timeZone:
+              'Asia/Kolkata'
+          }
+        ) + ' IST',
+
+      approvedBy:
+        currentUserRole,
+
+      approvedAt:
+        new Date().toISOString()
+          .split('T')[0],
+
+      totalAnnualDemand:
+        material.totalAnnualDemand ||
+        0,
+
+      avgUnitPrice:
+        material.avgUnitPrice ||
+        0,
+
+      potentialSavingsPercent:
+        material.potentialSavingsPercent ||
+        0,
+
+      activeSuppliersCount:
+        material.activeSuppliersCount ||
+        0,
+
+      authorizedInventory:
+        material.authorizedInventory ||
+        0,
+
       description:
         material.description ||
-        'Newly minted Bharat Material Grid canonical master record.'
+        'No description available.'
     };
 
-    setCommonMaterials(prev => [newMaterial, ...prev]);
 
-    const newAudit: AuditEvent = {
-      id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
-      timestamp:
-        new Date().toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata'
-        }) + ' IST',
-      user: currentUserRole,
-      userRole: currentUserRole,
-      cpse: 'National Master Data Authority',
-      action: 'Common Material Created',
-      materialId: newId,
-      previousValue: 'None (New Master Entity)',
-      newValue: `${newMaterial.standardName} (${newId})`,
-      reason:
-        'Authoritative national canonical material catalog addition.',
-      modelVersion: 'BMG-FastText-Transformer-v2.4.1',
-      verificationHash:
-        'sha256:' +
-        Array.from({ length: 64 }, () =>
-          Math.floor(Math.random() * 16).toString(16)
-        ).join('')
-    };
+    setCommonMaterials(prev => [
+      newMaterial,
+      ...prev
+    ]);
 
-    setAuditEvents(prev => [newAudit, ...prev]);
 
     addToast({
-      title: 'Canonical Material Created',
-      message: `Minted new national identity: ${newId}`,
-      type: 'success'
+
+      title:
+        'Material Created',
+
+      message:
+        `${newMaterial.standardName} created locally.`,
+
+      type:
+        'success'
     });
 
-    openMaterial360(newId);
+
+    openMaterial360(
+      newId
+    );
   };
 
-  // Action: Cleanup rule
-  const executeCleanupRule = (issueId: string) => {
-    const issue = qualityIssues.find(q => q.id === issueId);
-    if (!issue) return;
+
+  /* =======================================================
+     CLEANUP RULE
+  ======================================================= */
+
+  const executeCleanupRule = (
+    issueId: string
+  ) => {
+
+    const issue =
+      qualityIssues.find(
+        q => q.id === issueId
+      );
+
+    if (!issue) {
+      return;
+    }
+
 
     setQualityIssues(prev =>
-      prev.map(q =>
-        q.id === issueId
-          ? { ...q, status: 'Resolved' }
-          : q
+      prev.map(issueItem =>
+        issueItem.id === issueId
+          ? {
+              ...issueItem,
+              status:
+                'Resolved'
+            }
+          : issueItem
       )
     );
 
-    setCpses(prev =>
-      prev.map(c =>
-        c.code === issue.cpseCode
-          ? {
-              ...c,
-              qualityScore: Math.min(
-                99.4,
-                +(c.qualityScore + 2.4).toFixed(1)
-              ),
-              completenessRate: Math.min(
-                99.0,
-                +(c.completenessRate + 3.1).toFixed(1)
-              )
-            }
-          : c
-      )
-    );
 
     const newAudit: AuditEvent = {
-      id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
+
+      id:
+        'AUD-' +
+        Math.floor(
+          1000 +
+          Math.random() * 9000
+        ),
+
       timestamp:
-        new Date().toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata'
-        }) + ' IST',
-      user: currentUserRole,
-      userRole: currentUserRole,
-      cpse: issue.cpseCode,
-      action: 'Clean-up rule executed',
-      materialId: issue.id,
-      previousValue: `${issue.affectedRecordsCount} records flagged with ${issue.issueType}`,
+        new Date().toLocaleString(
+          'en-IN',
+          {
+            timeZone:
+              'Asia/Kolkata'
+          }
+        ) + ' IST',
+
+      user:
+        currentUserRole,
+
+      userRole:
+        currentUserRole,
+
+      cpse:
+        issue.cpseCode,
+
+      action:
+        'Clean-up rule executed',
+
+      materialId:
+        issue.id,
+
+      previousValue:
+        `${issue.affectedRecordsCount} records flagged with ${issue.issueType}`,
+
       newValue:
-        'Rule applied: Automated normalizer resolved non-conformances',
-      reason: issue.suggestedFix,
-      modelVersion: 'BMG-RuleEngine-v2.4',
+        'Rule applied. Actual remediation count pending database integration.',
+
+      reason:
+        issue.suggestedFix,
+
+      modelVersion:
+        'Rule Engine',
+
       verificationHash:
-        'sha256:' +
-        Array.from({ length: 64 }, () =>
-          Math.floor(Math.random() * 16).toString(16)
-        ).join('')
+        'NOT_AVAILABLE'
     };
 
-    setAuditEvents(prev => [newAudit, ...prev]);
+
+    setAuditEvents(prev => [
+      newAudit,
+      ...prev
+    ]);
+
 
     addToast({
-      title: 'Automated Cleanup Executed',
-      message: `Successfully remediated ${issue.affectedRecordsCount} records for ${issue.cpseCode}.`,
-      type: 'success'
+
+      title:
+        'Cleanup Executed',
+
+      message:
+        `Cleanup action recorded for ${issue.cpseCode}.`,
+
+      type:
+        'success'
     });
   };
 
+
+  /* =======================================================
+     SIH DEMO
+  ======================================================= */
+
   const startSIHDemo = () => {
+
     setDemoStep(1);
+
     setIsSIHDemoOpen(true);
   };
 
+
+  /* =======================================================
+     PROVIDER
+  ======================================================= */
+
   return (
+
     <AppContext.Provider
       value={{
+
         currentTab,
         setCurrentTab,
+
         currentUserRole,
         setCurrentUserRole,
+
         language,
         setLanguage,
 
         cpses,
+
         commonMaterials,
+
         materials,
+
         candidates,
+
         reviews,
+
         qualityIssues,
+
         procurementOpportunities,
+
         auditEvents,
+
         rules,
+
         dictionary,
+
         models,
+
         notifications,
+
         toasts,
 
         selectedMaterialId,
         setSelectedMaterialId,
+
         selectedCandidateId,
         setSelectedCandidateId,
+
         selectedCPSEId,
         setSelectedCPSEId,
+
         selectedOpportunityId,
         setSelectedOpportunityId,
+
         selectedIssueId,
         setSelectedIssueId,
 
         isCommandPaletteOpen,
         setIsCommandPaletteOpen,
+
         isNotificationsOpen,
         setIsNotificationsOpen,
+
         isAIAssistantOpen,
         setIsAIAssistantOpen,
+
         isSIHDemoOpen,
         setIsSIHDemoOpen,
+
         demoStep,
         setDemoStep,
 
         approveMatch,
+
         rejectMatch,
+
         requestMoreData,
+
         deferMatch,
+
         createCommonMaterial,
+
         executeCleanupRule,
+
         addToast,
+
         removeToast,
+
         markNotificationAsRead,
+
         startSIHDemo,
+
         openMaterial360,
+
         openCandidateMatch
       }}
     >
+
       {children}
+
     </AppContext.Provider>
   );
 };
 
+
+/* =========================================================
+   useApp
+========================================================= */
+
 export const useApp = () => {
-  const context = useContext(AppContext);
+
+  const context =
+    useContext(AppContext);
 
   if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
+
+    throw new Error(
+      'useApp must be used within an AppProvider'
+    );
   }
 
   return context;

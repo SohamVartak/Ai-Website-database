@@ -1,746 +1,894 @@
-import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
-import { MatchCandidate } from '../../types';
-import { ConfidenceMeter } from '../ui/ConfidenceMeter';
-import { AIInsightCard, EvidenceItem } from '../ui/AIInsightCard';
-import { AnimatedModal } from '../ui/AnimatedModal';
-import { AnimatedButton } from '../ui/AnimatedButton';
+import React, { useMemo, useState } from 'react';
 import {
-  Cpu,
-  ShieldCheck,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  ArrowRight,
-  Sparkles,
   Search,
-  Filter,
-  Check,
-  X,
-  FileQuestion,
-  Layers,
-  ChevronRight,
-  Info
+  Database,
+  Building2,
+  FileText,
+  Tag,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 
-export const AIMatchCenterView: React.FC = () => {
-  const {
-    candidates,
-    selectedCandidateId,
-    setSelectedCandidateId,
-    approveMatch,
-    rejectMatch,
-    requestMoreData,
-    deferMatch,
-    openMaterial360,
-    addToast
-  } = useApp();
+import { useApp } from '../../context/AppContext';
+import {
+  findThreeCompanyHarmonization,
+  HarmonizationResult,
+} from '../../../lib/materialHarmonization';
 
-  const [filterType, setFilterType] = useState<'All' | 'Low Risk' | 'Critical Mismatch' | 'Medium Risk'>('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [actionNote, setActionNote] = useState('');
+export default function AIMatchCenterView() {
+  const { materials, materialsLoading } = useApp();
 
-  // Animated Action States
-  const [isApproving, setIsApproving] = useState(false);
-  const [isApprovedSuccess, setIsApprovedSuccess] = useState(false);
-  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('Critical Dimensional / Geometric Discrepancy');
-  const [isRequestDataModalOpen, setIsRequestDataModalOpen] = useState(false);
-  const [requestDataType, setRequestDataType] = useState('Manufacturer Test Certificate (MTC 3.1)');
+  const [search, setSearch] = useState('');
+  const [selectedMaterialId, setSelectedMaterialId] = useState<number | null>(
+    null
+  );
 
-  // Selected candidate object
-  const activeCandidate = candidates.find(c => c.id === selectedCandidateId) || candidates[0];
+  const companyCounts = useMemo(() => {
+    const counts = {
+      BPCL: 0,
+      HPCL: 0,
+      IOCL: 0,
+      BHEL: 0,
+    };
 
-  const filteredCandidates = candidates.filter(c => {
-    const matchesFilter = filterType === 'All' || c.riskLevel === filterType;
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      c.id.toLowerCase().includes(q) ||
-      c.recordA.rawDescription.toLowerCase().includes(q) ||
-      c.recordB.rawDescription.toLowerCase().includes(q) ||
-      c.category.toLowerCase().includes(q);
-    return matchesFilter && matchesSearch;
-  });
+    materials.forEach((material) => {
+      const company = material.company?.trim().toUpperCase();
+
+      if (company === 'BPCL') counts.BPCL++;
+      if (company === 'HPCL') counts.HPCL++;
+      if (company === 'IOCL') counts.IOCL++;
+      if (company === 'BHEL') counts.BHEL++;
+    });
+
+    return counts;
+  }, [materials]);
+
+  const filteredMaterials = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    if (!query) {
+      return materials.slice(0, 100);
+    }
+
+    return materials
+      .filter((material) => {
+        const company = material.company?.toLowerCase() || '';
+        const materialNumber = material.material_number?.toLowerCase() || '';
+        const description = material.description?.toLowerCase() || '';
+        const specifications = material.specifications?.toLowerCase() || '';
+        const category = material.category?.toLowerCase() || '';
+
+        return (
+          company.includes(query) ||
+          materialNumber.includes(query) ||
+          description.includes(query) ||
+          specifications.includes(query) ||
+          category.includes(query)
+        );
+      })
+      .slice(0, 100);
+  }, [materials, search]);
+
+  const selectedMaterial = useMemo(() => {
+    if (selectedMaterialId === null) return null;
+
+    return (
+      materials.find((material) => material.id === selectedMaterialId) || null
+    );
+  }, [materials, selectedMaterialId]);
+
+  const harmonization = useMemo(() => {
+    if (!selectedMaterial) return null;
+
+    return findThreeCompanyHarmonization(selectedMaterial, materials);
+  }, [selectedMaterial, materials]);
+
+  const getRecommendationLabel = (
+    result: HarmonizationResult | null
+  ): string => {
+    if (!result) return 'No Match';
+
+    if (result.recommendation === 'LIKELY_MATCH') {
+      return 'Likely Match';
+    }
+
+    if (result.recommendation === 'REVIEW') {
+      return 'Needs Review';
+    }
+
+    return 'No Match';
+  };
+
+  const getRecommendationClass = (
+    result: HarmonizationResult | null
+  ): string => {
+    if (!result) {
+      return 'bg-slate-100 text-slate-600 border-slate-200';
+    }
+
+    if (result.recommendation === 'LIKELY_MATCH') {
+      return 'bg-green-50 text-green-700 border-green-200';
+    }
+
+    if (result.recommendation === 'REVIEW') {
+      return 'bg-amber-50 text-amber-700 border-amber-200';
+    }
+
+    return 'bg-red-50 text-red-700 border-red-200';
+  };
+
+  const getScoreBarClass = (score: number): string => {
+    if (score >= 80) {
+      return 'bg-green-500';
+    }
+
+    if (score >= 45) {
+      return 'bg-amber-500';
+    }
+
+    return 'bg-red-500';
+  };
+
+  const selectFirstBPCLMaterial = () => {
+    const bpclMaterial = materials.find(
+      (material) => material.company?.trim().toUpperCase() === 'BPCL'
+    );
+
+    if (bpclMaterial) {
+      setSelectedMaterialId(bpclMaterial.id);
+    }
+  };
+
+  if (materialsLoading) {
+    return (
+      <div className="flex min-h-[500px] items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="mx-auto mb-3 h-8 w-8 animate-spin text-slate-500" />
+          <p className="text-sm text-slate-600">
+            Loading material data from Supabase...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4 lg:p-6 space-y-6 max-w-[1600px] mx-auto">
-      {/* Top Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 p-6">
+      {/* HEADER */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
-              AI Decision & Spec Guard
+          <div className="mb-2 flex items-center gap-2">
+            <Sparkles className="h-6 w-6 text-indigo-600" />
+            <span className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
+              AI Harmonization
             </span>
-            <span className="text-xs text-slate-400 font-mono">BMG Dual-Encoder v2.4.1</span>
           </div>
-          <h1 className="text-xl font-bold text-white tracking-tight mt-1">
-            AI Match Center & Engineering Specification Guard
+
+          <h1 className="text-2xl font-bold text-slate-900">
+            Material Harmonization Center
           </h1>
-          <p className="text-xs text-slate-300">
-            Semantic discovery validated by strict physical engineering criteria to prevent hazardous false merges.
+
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">
+            Compare real material records across BPCL, HPCL and IOCL using
+            description, specification and category similarity.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-300 font-mono">
-            <span className="text-slate-400">Total Pairs:</span>{' '}
-            <strong className="text-white">{candidates.length}</strong>
+        <button
+          type="button"
+          onClick={selectFirstBPCLMaterial}
+          disabled={materials.length === 0}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Sparkles className="h-4 w-4" />
+          Test BPCL Material
+        </button>
+      </div>
+
+      {/* COMPANY COUNTS */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <CompanyCard
+          company="BPCL"
+          count={companyCounts.BPCL}
+          active={selectedMaterial?.company?.toUpperCase() === 'BPCL'}
+        />
+
+        <CompanyCard
+          company="HPCL"
+          count={companyCounts.HPCL}
+          active={harmonization?.hpcl !== null && harmonization?.hpcl !== undefined}
+        />
+
+        <CompanyCard
+          company="IOCL"
+          count={companyCounts.IOCL}
+          active={harmonization?.iocl !== null && harmonization?.iocl !== undefined}
+        />
+
+        <CompanyCard
+          company="BHEL"
+          count={companyCounts.BHEL}
+          active={false}
+        />
+      </div>
+
+      {/* SEARCH */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-900">
+              Select Source Material
+            </h2>
+            <p className="text-xs text-slate-500">
+              Select a real BPCL record to compare against HPCL and IOCL.
+            </p>
           </div>
-          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-1.5 text-xs text-rose-400 font-mono font-bold">
-            <span>Critical Mismatches: </span>
-            {candidates.filter(c => c.riskLevel === 'Critical Mismatch').length}
-          </div>
+
+          <Database className="h-5 w-5 text-slate-400" />
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search material number, description, category or company..."
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-indigo-400 focus:bg-white"
+          />
         </div>
       </div>
 
-      {/* 3-Column Workspace Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT COLUMN: Candidates Queue (4 Cols) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col h-[750px] overflow-hidden">
-          {/* Header & Filter */}
-          <div className="p-4 border-b border-slate-200 bg-slate-50/70 space-y-3 shrink-0">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-mono">
-                Candidate Pairs Queue
-              </h2>
-              <span className="text-xs font-mono text-slate-500 font-bold">
-                {filteredCandidates.length} Items
-              </span>
-            </div>
+      {/* MATERIAL LIST */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h2 className="font-semibold text-slate-900">
+            Material Records
+          </h2>
+          <p className="text-xs text-slate-500">
+            Showing up to 100 matching records.
+          </p>
+        </div>
 
-            {/* Search */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search by description, pair #..."
-                className="w-full bg-white border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-hidden focus:border-amber-500"
-              />
-            </div>
-
-            {/* Filter Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px]">
-              <button
-                onClick={() => setFilterType('All')}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                  filterType === 'All'
-                    ? 'bg-slate-900 text-white font-bold'
-                    : 'bg-slate-200/70 text-slate-700 hover:bg-slate-300'
-                }`}
-              >
-                All Pairs
-              </button>
-              <button
-                onClick={() => setFilterType('Low Risk')}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                  filterType === 'Low Risk'
-                    ? 'bg-emerald-600 text-white font-bold'
-                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                }`}
-              >
-                Safe (95%+)
-              </button>
-              <button
-                onClick={() => setFilterType('Critical Mismatch')}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                  filterType === 'Critical Mismatch'
-                    ? 'bg-rose-600 text-white font-bold'
-                    : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
-                }`}
-              >
-                Spec Mismatches
-              </button>
-            </div>
+        {filteredMaterials.length === 0 ? (
+          <div className="p-10 text-center">
+            <Database className="mx-auto mb-3 h-8 w-8 text-slate-300" />
+            <p className="font-medium text-slate-700">
+              No material records found
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Try a different search term.
+            </p>
           </div>
-
-          {/* List */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5 divide-y divide-slate-100">
-            {filteredCandidates.map(cand => {
-              const isSelected = activeCandidate.id === cand.id;
-              const isApproved = cand.status === 'Approved';
-              const isRejected = cand.status === 'Rejected';
+        ) : (
+          <div className="max-h-[420px] overflow-y-auto">
+            {filteredMaterials.map((material) => {
+              const isSelected = material.id === selectedMaterialId;
 
               return (
-                <div
-                  key={cand.id}
-                  onClick={() => setSelectedCandidateId(cand.id)}
-                  className={`pt-2.5 first:pt-0 p-3 rounded-xl border transition-all cursor-pointer ${
+                <button
+                  key={material.id}
+                  type="button"
+                  onClick={() => setSelectedMaterialId(material.id)}
+                  className={`block w-full border-b border-slate-100 px-4 py-4 text-left transition last:border-b-0 ${
                     isSelected
-                      ? 'bg-slate-900 border-slate-900 text-white shadow-md'
-                      : 'bg-white border-slate-200 hover:border-amber-400 hover:bg-slate-50/50'
+                      ? 'bg-indigo-50'
+                      : 'bg-white hover:bg-slate-50'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                          isSelected
-                            ? 'bg-amber-400 text-slate-950'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        Pair #{cand.pairNumber}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        {cand.category}
-                      </span>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                          {material.company}
+                        </span>
+
+                        <span className="font-mono text-xs text-slate-500">
+                          {material.material_number || 'No material number'}
+                        </span>
+                      </div>
+
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {material.description || 'No description available'}
+                      </p>
+
+                      <p className="mt-1 truncate text-xs text-slate-500">
+                        {material.category || 'No category'}
+                      </p>
                     </div>
 
-                    <span
-                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
-                        cand.riskLevel === 'Critical Mismatch'
-                          ? isSelected
-                            ? 'bg-rose-500 text-white'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          : cand.riskLevel === 'Low Risk'
-                          ? isSelected
-                            ? 'bg-emerald-500 text-white'
-                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}
-                    >
-                      {cand.scores.overallConfidence}% Match
-                    </span>
-                  </div>
-
-                  {/* Descriptions Preview */}
-                  <div className="mt-2 text-xs space-y-1">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className={`text-[10px] font-bold px-1 rounded ${isSelected ? 'bg-slate-800 text-orange-300' : 'bg-slate-100 text-orange-700'}`}>
-                        {cand.recordA.cpseCode}
-                      </span>
-                      <span className={`truncate ${isSelected ? 'text-slate-200' : 'text-slate-700'}`}>
-                        {cand.recordA.rawDescription}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className={`text-[10px] font-bold px-1 rounded ${isSelected ? 'bg-slate-800 text-blue-300' : 'bg-slate-100 text-blue-700'}`}>
-                        {cand.recordB.cpseCode}
-                      </span>
-                      <span className={`truncate ${isSelected ? 'text-slate-200' : 'text-slate-700'}`}>
-                        {cand.recordB.rawDescription}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Status indicator */}
-                  <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono">
-                    <span className={isSelected ? 'text-slate-400' : 'text-slate-500'}>
-                      Risk: {cand.riskLevel}
-                    </span>
-                    {isApproved && (
-                      <span className="text-emerald-400 font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Approved
-                      </span>
-                    )}
-                    {isRejected && (
-                      <span className="text-rose-400 font-bold flex items-center gap-1">
-                        <XCircle className="w-3 h-3" /> Rejected
-                      </span>
+                    {isSelected && (
+                      <CheckCircle2 className="h-5 w-5 shrink-0 text-indigo-600" />
                     )}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* CENTER COLUMN: Deep Investigation & Attribute Matrix (5 Cols) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-5">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-slate-900">
-                  Candidate Pair #{activeCandidate.pairNumber}
-                </h2>
-                <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold">
-                  {activeCandidate.id}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Multi-CPSE Technical Specification Concordance Analysis
-              </p>
+      {/* SELECTED MATERIAL */}
+      {selectedMaterial && harmonization && (
+        <>
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <FileText className="h-5 w-5 text-indigo-600" />
+              <h2 className="font-semibold text-slate-900">
+                Selected Source Material
+              </h2>
             </div>
 
-            <div className="text-right font-mono">
-              <span className="text-[10px] text-slate-400 block">AI Status</span>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                activeCandidate.status === 'Approved'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : activeCandidate.status === 'Rejected'
-                  ? 'bg-rose-100 text-rose-800'
-                  : 'bg-amber-100 text-amber-800'
-              }`}>
-                {activeCandidate.status}
-              </span>
-            </div>
-          </div>
+            <div className="grid gap-4 lg:grid-cols-4">
+              <InfoBox
+                label="Company"
+                value={selectedMaterial.company}
+                icon={<Building2 className="h-4 w-4" />}
+              />
 
-          {/* CRITICAL MISMATCH ALERT CALLOUT IF PRESENT */}
-          {activeCandidate.criticalMismatchReason && (
-            <div className="p-4 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-2 animate-in fade-in">
-              <div className="flex items-center gap-2 text-rose-800 font-bold text-xs">
-                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>SAFETY GUARD INTERVENTION: UNSAFE CANDIDATE</span>
-              </div>
-              <p className="text-xs text-rose-900 leading-relaxed font-medium">
-                {activeCandidate.criticalMismatchReason}
-              </p>
-              <div className="text-[11px] text-rose-700 bg-white/80 p-2 rounded-lg border border-rose-200 font-mono">
-                AI Semantic Score is 94.8% due to common terminology, but physical length differs (50mm vs 60mm). Automated merge was blocked by Bharat Material Grid to protect piping safety.
-              </div>
-            </div>
-          )}
+              <InfoBox
+                label="Material Number"
+                value={selectedMaterial.material_number || 'N/A'}
+                icon={<Tag className="h-4 w-4" />}
+              />
 
-          {/* Side-by-Side Raw Records */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Record A */}
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
-                  {activeCandidate.recordA.cpseCode}
-                </span>
-                <span className="font-mono text-slate-500">{activeCandidate.recordA.localCode}</span>
-              </div>
-              <div className="text-xs font-bold text-slate-900 font-mono bg-white p-2 rounded border border-slate-200">
-                "{activeCandidate.recordA.rawDescription}"
-              </div>
-              <div className="text-[11px] text-slate-500">
-                <strong>Normalized:</strong> {activeCandidate.recordA.normalizedName}
-              </div>
-            </div>
+              <InfoBox
+                label="Description"
+                value={selectedMaterial.description || 'N/A'}
+                icon={<FileText className="h-4 w-4" />}
+              />
 
-            {/* Record B */}
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                  {activeCandidate.recordB.cpseCode}
-                </span>
-                <span className="font-mono text-slate-500">{activeCandidate.recordB.localCode}</span>
-              </div>
-              <div className="text-xs font-bold text-slate-900 font-mono bg-white p-2 rounded border border-slate-200">
-                "{activeCandidate.recordB.rawDescription}"
-              </div>
-              <div className="text-[11px] text-slate-500">
-                <strong>Normalized:</strong> {activeCandidate.recordB.normalizedName}
-              </div>
-            </div>
-          </div>
-
-          {/* Attribute Comparison Matrix Table */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
-              Engineering Specification Matrix
-            </h3>
-            <div className="overflow-hidden border border-slate-200 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100/80 text-[10px] font-mono text-slate-600 uppercase border-b border-slate-200">
-                  <tr>
-                    <th className="p-2.5 font-semibold">Attribute</th>
-                    <th className="p-2.5 font-semibold">{activeCandidate.recordA.cpseCode}</th>
-                    <th className="p-2.5 font-semibold">{activeCandidate.recordB.cpseCode}</th>
-                    <th className="p-2.5 font-semibold text-right">Concordance</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {/* Material */}
-                  <tr className="hover:bg-slate-50">
-                    <td className="p-2.5 font-semibold text-slate-700">Material</td>
-                    <td className="p-2.5 font-mono text-slate-900">{activeCandidate.recordA.specifications.material}</td>
-                    <td className="p-2.5 font-mono text-slate-900">{activeCandidate.recordB.specifications.material}</td>
-                    <td className="p-2.5 text-right">
-                      <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
-                        MATCH (100%)
-                      </span>
-                    </td>
-                  </tr>
-
-                  {/* Grade */}
-                  <tr className="hover:bg-slate-50">
-                    <td className="p-2.5 font-semibold text-slate-700">Grade</td>
-                    <td className="p-2.5 font-mono text-slate-900">{activeCandidate.recordA.specifications.grade}</td>
-                    <td className="p-2.5 font-mono text-slate-900">{activeCandidate.recordB.specifications.grade}</td>
-                    <td className="p-2.5 text-right">
-                      <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
-                        MATCH (100%)
-                      </span>
-                    </td>
-                  </tr>
-
-                  {/* Diameter */}
-                  <tr className="hover:bg-slate-50">
-                    <td className="p-2.5 font-semibold text-slate-700">Diameter / Bore</td>
-                    <td className="p-2.5 font-mono text-slate-900">{activeCandidate.recordA.specifications.diameter || 'N/A'}</td>
-                    <td className="p-2.5 font-mono text-slate-900">{activeCandidate.recordB.specifications.diameter || 'N/A'}</td>
-                    <td className="p-2.5 text-right">
-                      <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
-                        MATCH (100%)
-                      </span>
-                    </td>
-                  </tr>
-
-                  {/* Length / Rating */}
-                  <tr className="hover:bg-slate-50">
-                    <td className="p-2.5 font-semibold text-slate-700">Length / Rating</td>
-                    <td className="p-2.5 font-mono text-slate-900">{activeCandidate.recordA.specifications.length || activeCandidate.recordA.specifications.pressureRating || 'N/A'}</td>
-                    <td className="p-2.5 font-mono text-slate-900">{activeCandidate.recordB.specifications.length || activeCandidate.recordB.specifications.pressureRating || 'N/A'}</td>
-                    <td className="p-2.5 text-right">
-                      {activeCandidate.scores.dimensionMatch === 0 ? (
-                        <span className="text-[10px] font-bold bg-rose-100 text-rose-800 px-2 py-0.5 rounded border border-rose-300">
-                          MISMATCH (0%)
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
-                          MATCH (100%)
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-
-                  {/* Standard */}
-                  <tr className="hover:bg-slate-50">
-                    <td className="p-2.5 font-semibold text-slate-700">Standard / Norm</td>
-                    <td className="p-2.5 font-mono text-slate-900">{activeCandidate.recordA.specifications.standard || 'ISO / IS Compliant'}</td>
-                    <td className="p-2.5 font-mono text-slate-900">{activeCandidate.recordB.specifications.standard || 'ISO / IS Compliant'}</td>
-                    <td className="p-2.5 text-right">
-                      <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
-                        MATCH (100%)
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* AI Explanation Box replaced by AIInsightCard */}
-          <AIInsightCard
-            title="Why did AI recommend this match?"
-            confidenceScore={activeCandidate.scores.overallConfidence}
-            explanation={activeCandidate.aiExplanation}
-            evidenceItems={[
-              {
-                type: 'positive',
-                label: 'Category Concordance',
-                detail: `Both CPSE items map directly to "${activeCandidate.category}" classification.`
-              },
-              {
-                type: 'positive',
-                label: 'Semantic Lexical Alignment',
-                detail: `Transformer vector similarity calculated at ${activeCandidate.scores.semanticSimilarity}%.`
-              },
-              {
-                type: 'positive',
-                label: 'Metallurgical Grade Match',
-                detail: `Grade ${activeCandidate.recordA.specifications.grade} verified identical across both enterprise records.`
-              },
-              activeCandidate.scores.dimensionMatch === 0
-                ? {
-                    type: 'warning',
-                    label: 'Dimensional Discrepancy Detected',
-                    detail: activeCandidate.criticalMismatchReason || 'Length or diameter difference detected by engineering parser.'
-                  }
-                : {
-                    type: 'positive',
-                    label: 'Matching Dimensions & Tolerance',
-                    detail: `Physical dimensions and rating (${activeCandidate.recordA.specifications.diameter || activeCandidate.recordA.specifications.pressureRating || 'Standard specs'}) match within tolerance.`
-                  },
-              ...(activeCandidate.criticalMismatchReason
-                ? [{
-                    type: 'warning' as const,
-                    label: 'Safety Guard Intervention',
-                    detail: activeCandidate.criticalMismatchReason
-                  }]
-                : [])
-            ]}
-          />
-        </div>
-
-        {/* RIGHT COLUMN: Confidence Vector & Governance Action (3 Cols) */}
-        <div className="lg:col-span-3 space-y-5">
-          {/* Animated Confidence Meter Card */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-mono">
-                Match Confidence
-              </h3>
-              <span className="text-xs font-mono font-medium text-slate-500">
-                AI Dual-Encoder
-              </span>
-            </div>
-
-            <ConfidenceMeter
-              confidenceScore={activeCandidate.scores.overallConfidence}
-              categoryMatch={activeCandidate.scores.semanticSimilarity}
-              attributeMatch={activeCandidate.scores.materialMatch}
-              specificationMatch={activeCandidate.scores.specificationMatch}
-              showBreakdown={true}
-              size="md"
-            />
-          </div>
-
-          {/* Officer Decision Panel */}
-          <div className="bg-slate-900 text-white rounded-2xl border border-slate-800 p-5 shadow-lg space-y-4">
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-400 font-mono">
-              <ShieldCheck className="w-4 h-4" />
-              <span>OFFICER GOVERNANCE ACTIONS</span>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[11px] text-slate-400 block font-mono">
-                Decision Note & Justification
-              </label>
-              <textarea
-                value={actionNote}
-                onChange={e => setActionNote(e.target.value)}
-                placeholder="Enter audit note (e.g., MTC verified, length difference verified)..."
-                rows={2}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-amber-400 resize-none"
+              <InfoBox
+                label="Category"
+                value={selectedMaterial.category || 'N/A'}
+                icon={<Tag className="h-4 w-4" />}
               />
             </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-2 pt-1">
-              <AnimatedButton
-                onClick={() => {
-                  setIsApproving(true);
-                  setTimeout(() => {
-                    setIsApproving(false);
-                    setIsApprovedSuccess(true);
-                    approveMatch(activeCandidate.id, actionNote);
-                    addToast({
-                      type: 'success',
-                      title: 'Match Approved & Master Minted',
-                      message: `Candidate ${activeCandidate.id} has been canonicalized into BMG Master Registry.`
-                    });
-                    setActionNote('');
-                    setTimeout(() => setIsApprovedSuccess(false), 2000);
-                  }, 600);
-                }}
-                disabled={activeCandidate.status === 'Approved' || activeCandidate.riskLevel === 'Critical Mismatch'}
-                isLoading={isApproving}
-                isSuccess={isApprovedSuccess || activeCandidate.status === 'Approved'}
-                variant="success"
-                className="w-full justify-center py-2.5"
-                icon={<Check className="w-4 h-4" />}
-              >
-                {activeCandidate.status === 'Approved'
-                  ? 'Canonical BMG ID Approved'
-                  : 'Approve & Mint Common BMG ID'}
-              </AnimatedButton>
-
-              <AnimatedButton
-                onClick={() => setIsRejectModalOpen(true)}
-                disabled={activeCandidate.status === 'Rejected'}
-                variant="danger"
-                className="w-full justify-center py-2"
-                icon={<X className="w-4 h-4" />}
-              >
-                {activeCandidate.status === 'Rejected'
-                  ? 'Rejected (Discrete Codes Kept)'
-                  : 'Reject (Keep Discrete Codes)'}
-              </AnimatedButton>
-
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <button
-                  onClick={() => setIsRequestDataModalOpen(true)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-xl text-[11px] font-semibold border border-slate-700 flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                >
-                  <FileQuestion className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Request MTC</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    deferMatch(activeCandidate.id);
-                    addToast({
-                      type: 'info',
-                      title: 'Review Deferred',
-                      message: `Candidate ${activeCandidate.id} moved to deferred queue.`
-                    });
-                  }}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-xl text-[11px] font-semibold border border-slate-700 flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                >
-                  <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Defer Review</span>
-                </button>
-              </div>
-            </div>
-
-            {activeCandidate.targetBmgId && (
-              <div className="pt-2 border-t border-slate-800">
-                <button
-                  onClick={() => openMaterial360(activeCandidate.targetBmgId!)}
-                  className="w-full text-cyan-400 hover:text-cyan-300 text-xs font-semibold flex items-center justify-center gap-1.5 py-1 cursor-pointer"
-                >
-                  <span>Inspect Target Master ({activeCandidate.targetBmgId})</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+            {selectedMaterial.specifications && (
+              <div className="mt-4 rounded-lg border border-indigo-100 bg-white p-4">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Specifications
+                </p>
+                <p className="text-sm text-slate-700">
+                  {selectedMaterial.specifications}
+                </p>
               </div>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* Rejection Animated Modal */}
-      <AnimatedModal
-        isOpen={isRejectModalOpen}
-        onClose={() => setIsRejectModalOpen(false)}
-        title="Reject AI Match Recommendation"
-        subtitle={`Candidate Pair: ${activeCandidate.id}`}
-        maxWidth="max-w-lg"
-      >
-        <div className="space-y-4">
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1">
-            <span className="font-bold flex items-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-              Preserving Enterprise Distinct Codes
-            </span>
-            <p>
-              Rejecting this pair prevents automated catalog merging and ensures {activeCandidate.recordA.cpseCode} and {activeCandidate.recordB.cpseCode} retain independent material codes.
-            </p>
-          </div>
+          {/* THREE COMPANY COMPARISON */}
+          <div>
+            <div className="mb-4">
+              <h2 className="text-xl font-bold text-slate-900">
+                3-Company Harmonization
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                BPCL source material compared with the closest HPCL and IOCL
+                records available in Supabase.
+              </p>
+            </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Primary Rejection Cause</label>
-            <div className="space-y-2">
-              {[
-                'Critical Dimensional / Geometric Discrepancy',
-                'Metallurgical / Chemical Grade Incompatibility',
-                'Different Operational Pressure / Temperature Class',
-                'Distinct Proprietary OEM Specification'
-              ].map(reason => (
-                <label
-                  key={reason}
-                  onClick={() => setRejectionReason(reason)}
-                  className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
-                    rejectionReason === reason
-                      ? 'bg-rose-50/70 border-rose-300 text-rose-900 font-semibold'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    checked={rejectionReason === reason}
-                    onChange={() => setRejectionReason(reason)}
-                    className="accent-rose-600"
-                  />
-                  <span>{reason}</span>
-                </label>
-              ))}
+            <div className="grid gap-4 lg:grid-cols-3">
+              {/* BPCL */}
+              <MaterialCompanyCard
+                title="BPCL"
+                subtitle="Source Material"
+                material={harmonization.source}
+                source
+              />
+
+              {/* HPCL */}
+              <MaterialCompanyCard
+                title="HPCL"
+                subtitle="Closest Match"
+                material={harmonization.hpcl?.target || null}
+                result={harmonization.hpcl}
+              />
+
+              {/* IOCL */}
+              <MaterialCompanyCard
+                title="IOCL"
+                subtitle="Closest Match"
+                material={harmonization.iocl?.target || null}
+                result={harmonization.iocl}
+              />
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Audit Justification Notes</label>
-            <textarea
-              value={actionNote}
-              onChange={e => setActionNote(e.target.value)}
-              placeholder="Provide engineering context for national audit registry..."
-              rows={3}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-hidden focus:border-rose-400 resize-none"
-            />
+          {/* ANALYSIS */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-5 flex items-start gap-3">
+              <div className="rounded-lg bg-indigo-100 p-2">
+                <Sparkles className="h-5 w-5 text-indigo-600" />
+              </div>
+
+              <div>
+                <h2 className="font-semibold text-slate-900">
+                  Harmonization Analysis
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Similarity calculated from the actual material fields.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              <AnalysisCard
+                company="HPCL"
+                result={harmonization.hpcl}
+                scoreBarClass={
+                  harmonization.hpcl
+                    ? getScoreBarClass(harmonization.hpcl.similarityScore)
+                    : 'bg-slate-300'
+                }
+                recommendationLabel={getRecommendationLabel(
+                  harmonization.hpcl
+                )}
+                recommendationClass={getRecommendationClass(
+                  harmonization.hpcl
+                )}
+              />
+
+              <AnalysisCard
+                company="IOCL"
+                result={harmonization.iocl}
+                scoreBarClass={
+                  harmonization.iocl
+                    ? getScoreBarClass(harmonization.iocl.similarityScore)
+                    : 'bg-slate-300'
+                }
+                recommendationLabel={getRecommendationLabel(
+                  harmonization.iocl
+                )}
+                recommendationClass={getRecommendationClass(
+                  harmonization.iocl
+                )}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
-            <button
-              onClick={() => setIsRejectModalOpen(false)}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                rejectMatch(activeCandidate.id, `${rejectionReason}: ${actionNote}`);
-                setIsRejectModalOpen(false);
-                addToast({
-                  type: 'warning',
-                  title: 'Candidate Match Rejected',
-                  message: `Candidate ${activeCandidate.id} rejected. Catalog separation maintained.`
-                });
-                setActionNote('');
-              }}
-              className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors cursor-pointer"
-            >
-              Confirm Rejection
-            </button>
+          {/* FIELD COMPARISON */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-5">
+              <h2 className="font-semibold text-slate-900">
+                Field-Level Comparison
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-500">
+                The comparison uses description, specifications and category.
+              </p>
+            </div>
+
+            <div className="space-y-6">
+              <ComparisonSection
+                title="BPCL → HPCL"
+                result={harmonization.hpcl}
+              />
+
+              <ComparisonSection
+                title="BPCL → IOCL"
+                result={harmonization.iocl}
+              />
+            </div>
           </div>
+
+          {/* GOVERNANCE */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+            <div className="flex gap-3">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-slate-600" />
+
+              <div>
+                <h3 className="font-semibold text-slate-800">
+                  Harmonization Governance
+                </h3>
+
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  This analysis is generated from the actual Supabase material
+                  records. The similarity percentage is a rule-based
+                  comparison score and should be treated as decision support,
+                  not as proof that two materials are technically identical.
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* NO MATERIAL SELECTED */}
+      {!selectedMaterial && (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
+          <Sparkles className="mx-auto mb-4 h-10 w-10 text-slate-300" />
+
+          <h2 className="font-semibold text-slate-800">
+            Select a BPCL material to begin
+          </h2>
+
+          <p className="mx-auto mt-2 max-w-lg text-sm text-slate-500">
+            The system will automatically find the closest HPCL and IOCL
+            records and calculate their harmonization scores.
+          </p>
         </div>
-      </AnimatedModal>
-
-      {/* Request More Data Animated Modal */}
-      <AnimatedModal
-        isOpen={isRequestDataModalOpen}
-        onClose={() => setIsRequestDataModalOpen(false)}
-        title="Dispatch Data Request to CPSE"
-        subtitle={`Request Technical Documents for ${activeCandidate.id}`}
-        maxWidth="max-w-lg"
-      >
-        <div className="space-y-4">
-          <div className="p-3 bg-cyan-50 border border-cyan-200 rounded-xl text-xs text-cyan-800 space-y-1">
-            <span className="font-bold flex items-center gap-1.5">
-              <FileQuestion className="w-3.5 h-3.5 text-cyan-600" />
-              Nodal Officer Clarification Protocol
-            </span>
-            <p>
-              An automated clarification request will be dispatched to the material custodians at {activeCandidate.recordA.cpseCode} and {activeCandidate.recordB.cpseCode}.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Document / Artifact Required</label>
-            <select
-              value={requestDataType}
-              onChange={e => setRequestDataType(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-hidden focus:border-cyan-500"
-            >
-              <option value="Manufacturer Test Certificate (MTC 3.1)">Manufacturer Test Certificate (MTC 3.1)</option>
-              <option value="Certified Engineering Dimensional Drawing">Certified Engineering Dimensional Drawing</option>
-              <option value="Hydrostatic Pressure Test Certificate">Hydrostatic Pressure Test Certificate</option>
-              <option value="OEM Specification Data Sheet">OEM Specification Data Sheet</option>
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Specific Discrepancy to Clarify</label>
-            <textarea
-              value={actionNote}
-              onChange={e => setActionNote(e.target.value)}
-              placeholder="e.g., Please clarify if overall length is 50mm or 60mm as per drawing rev 4..."
-              rows={3}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-hidden focus:border-cyan-500 resize-none"
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
-            <button
-              onClick={() => setIsRequestDataModalOpen(false)}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                requestMoreData(activeCandidate.id, `${requestDataType}: ${actionNote}`);
-                setIsRequestDataModalOpen(false);
-                addToast({
-                  type: 'info',
-                  title: 'Clarification Dispatched',
-                  message: `Request for ${requestDataType} sent to CPSE Nodal Officers.`
-                });
-                setActionNote('');
-              }}
-              className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-xs transition-colors cursor-pointer"
-            >
-              Send Request to CPSE
-            </button>
-          </div>
-        </div>
-      </AnimatedModal>
+      )}
     </div>
   );
-};
+}
+
+/* -------------------------------------------------------------------------- */
+/* COMPONENTS                                                                  */
+/* -------------------------------------------------------------------------- */
+
+function CompanyCard({
+  company,
+  count,
+  active,
+}: {
+  company: string;
+  count: number;
+  active: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-xl border bg-white p-4 shadow-sm ${
+        active ? 'border-indigo-300 ring-1 ring-indigo-100' : 'border-slate-200'
+      }`}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <Building2 className="h-5 w-5 text-slate-500" />
+
+        <span
+          className={`rounded-full px-2 py-1 text-xs font-medium ${
+            count > 0
+              ? 'bg-green-50 text-green-700'
+              : 'bg-slate-100 text-slate-500'
+          }`}
+        >
+          {count > 0 ? 'Data available' : '0 records'}
+        </span>
+      </div>
+
+      <p className="text-sm font-semibold text-slate-900">{company}</p>
+
+      <p className="mt-1 text-2xl font-bold text-slate-900">
+        {count.toLocaleString()}
+      </p>
+
+      <p className="text-xs text-slate-500">material records</p>
+    </div>
+  );
+}
+
+function InfoBox({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <div className="mb-2 flex items-center gap-2 text-slate-400">
+        {icon}
+        <span className="text-xs font-semibold uppercase tracking-wide">
+          {label}
+        </span>
+      </div>
+
+      <p className="break-words text-sm font-medium text-slate-800">{value}</p>
+    </div>
+  );
+}
+
+function MaterialCompanyCard({
+  title,
+  subtitle,
+  material,
+  result,
+  source = false,
+}: {
+  title: string;
+  subtitle: string;
+  material: any;
+  result?: HarmonizationResult | null;
+  source?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-slate-500" />
+              <h3 className="font-bold text-slate-900">{title}</h3>
+            </div>
+
+            <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
+          </div>
+
+          {result && (
+            <div className="text-right">
+              <p className="text-2xl font-bold text-slate-900">
+                {result.similarityScore}%
+              </p>
+
+              <p className="text-xs text-slate-500">similarity</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {material ? (
+        <div className="space-y-4 p-4">
+          <DetailRow
+            label="Material Number"
+            value={material.material_number || 'N/A'}
+          />
+
+          <DetailRow
+            label="Description"
+            value={material.description || 'N/A'}
+          />
+
+          <DetailRow
+            label="Specifications"
+            value={material.specifications || 'N/A'}
+          />
+
+          <DetailRow
+            label="Category"
+            value={material.category || 'N/A'}
+          />
+
+          {!source && result && (
+            <div
+              className={`rounded-lg border p-3 ${
+                result.recommendation === 'LIKELY_MATCH'
+                  ? 'border-green-200 bg-green-50'
+                  : result.recommendation === 'REVIEW'
+                  ? 'border-amber-200 bg-amber-50'
+                  : 'border-red-200 bg-red-50'
+              }`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide">
+                {result.recommendation === 'LIKELY_MATCH'
+                  ? 'Likely Match'
+                  : result.recommendation === 'REVIEW'
+                  ? 'Needs Review'
+                  : 'No Match'}
+              </p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="p-8 text-center">
+          <AlertCircle className="mx-auto mb-2 h-7 w-7 text-slate-300" />
+
+          <p className="text-sm font-medium text-slate-600">
+            No matching record found
+          </p>
+
+          <p className="mt-1 text-xs text-slate-400">
+            No comparable record was available in this company.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </p>
+
+      <p className="break-words text-sm text-slate-700">{value}</p>
+    </div>
+  );
+}
+
+function AnalysisCard({
+  company,
+  result,
+  scoreBarClass,
+  recommendationLabel,
+  recommendationClass,
+}: {
+  company: string;
+  result: HarmonizationResult | null;
+  scoreBarClass: string;
+  recommendationLabel: string;
+  recommendationClass: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 p-4">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">{company}</p>
+          <p className="text-xs text-slate-500">Compared with BPCL</p>
+        </div>
+
+        <span
+          className={`rounded-full border px-3 py-1 text-xs font-semibold ${recommendationClass}`}
+        >
+          {recommendationLabel}
+        </span>
+      </div>
+
+      {result ? (
+        <>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm text-slate-600">Similarity Score</span>
+
+            <span className="text-lg font-bold text-slate-900">
+              {result.similarityScore}%
+            </span>
+          </div>
+
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className={`h-full rounded-full transition-all ${scoreBarClass}`}
+              style={{
+                width: `${Math.min(result.similarityScore, 100)}%`,
+              }}
+            />
+          </div>
+
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Matched Fields
+            </p>
+
+            {result.matchedFields.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {result.matchedFields.map((field) => (
+                  <span
+                    key={field}
+                    className="rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700"
+                  >
+                    {field}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">No strong field matches.</p>
+            )}
+          </div>
+
+          {result.differences.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Differences
+              </p>
+
+              <div className="space-y-1">
+                {result.differences.map((difference) => (
+                  <div
+                    key={difference}
+                    className="flex items-center gap-2 text-xs text-slate-600"
+                  >
+                    <ArrowRight className="h-3 w-3 shrink-0 text-slate-400" />
+                    {difference}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="rounded-lg bg-slate-50 p-4 text-center">
+          <p className="text-sm text-slate-500">
+            No comparison result available.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ComparisonSection({
+  title,
+  result,
+}: {
+  title: string;
+  result: HarmonizationResult | null;
+}) {
+  if (!result) {
+    return (
+      <div className="rounded-lg border border-slate-200 p-4">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 text-slate-400" />
+          <p className="text-sm font-semibold text-slate-700">{title}</p>
+        </div>
+
+        <p className="mt-2 text-sm text-slate-500">
+          No comparable material found.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-4">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-slate-500" />
+          <p className="text-sm font-semibold text-slate-800">{title}</p>
+        </div>
+
+        <span className="text-sm font-bold text-slate-900">
+          {result.similarityScore}%
+        </span>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <FieldResult
+          name="Description"
+          matched={result.matchedFields.includes('Description')}
+        />
+
+        <FieldResult
+          name="Specifications"
+          matched={result.matchedFields.includes('Specifications')}
+        />
+
+        <FieldResult
+          name="Category"
+          matched={result.matchedFields.includes('Category')}
+        />
+      </div>
+    </div>
+  );
+}
+
+function FieldResult({
+  name,
+  matched,
+}: {
+  name: string;
+  matched: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-lg border p-3 ${
+        matched
+          ? 'border-green-200 bg-green-50'
+          : 'border-slate-200 bg-slate-50'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        {matched ? (
+          <CheckCircle2 className="h-4 w-4 text-green-600" />
+        ) : (
+          <AlertCircle className="h-4 w-4 text-slate-400" />
+        )}
+
+        <span
+          className={`text-sm font-medium ${
+            matched ? 'text-green-700' : 'text-slate-600'
+          }`}
+        >
+          {name}
+        </span>
+      </div>
+
+      <p className="mt-1 text-xs text-slate-500">
+        {matched ? 'Strong similarity detected' : 'Difference detected'}
+      </p>
+    </div>
+  );
+}

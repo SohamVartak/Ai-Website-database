@@ -130,7 +130,7 @@ const App = ()=>{
                     columnNumber: 16
                 }, ("TURBOPACK compile-time value", void 0));
             case 'ai-match':
-                return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$views$2f$AIMatchCenterView$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["AIMatchCenterView"], {}, void 0, false, {
+                return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$views$2f$AIMatchCenterView$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {}, void 0, false, {
                     fileName: "[project]/src/App.tsx",
                     lineNumber: 63,
                     columnNumber: 16
@@ -280,19 +280,29 @@ var _s = __turbopack_context__.k.signature(), _s1 = __turbopack_context__.k.sign
 ;
 ;
 ;
-const AppContext = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["createContext"])(undefined);
+/* =========================================================
+   CONTEXT
+========================================================= */ const AppContext = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["createContext"])(undefined);
 const AppProvider = ({ children })=>{
     _s();
-    const [currentTab, setCurrentTab] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('home');
+    /* =======================================================
+     BASIC APP STATE
+  ======================================================= */ const [currentTab, setCurrentTab] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('home');
     const [currentUserRole, setCurrentUserRole] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('National Administrator');
     const [language, setLanguage] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('EN');
-    // Core Data Collections
-    const [cpses, setCpses] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$data$2f$mockData$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["INITIAL_CPSES"]);
-    const [commonMaterials, setCommonMaterials] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$data$2f$mockData$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["INITIAL_COMMON_MATERIALS"]);
-    // Real materials loaded from Supabase
-    const [materials, setMaterials] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
+    /* =======================================================
+     DATA COLLECTIONS
+
+     IMPORTANT:
+     commonMaterials is now EMPTY.
+     We no longer use INITIAL_COMMON_MATERIALS.
+  ======================================================= */ const [cpses, setCpses] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$data$2f$mockData$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["INITIAL_CPSES"]);
+    const [commonMaterials, setCommonMaterials] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
+    /* REAL DATABASE MATERIALS */ const [materials, setMaterials] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
     const [materialsLoading, setMaterialsLoading] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(true);
-    const [candidates, setCandidates] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$data$2f$mockData$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["INITIAL_CANDIDATES"]);
+    /* Existing non-material collections
+     are temporarily retained so existing pages
+     continue working while we migrate them. */ const [candidates, setCandidates] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$data$2f$mockData$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["INITIAL_CANDIDATES"]);
     const [reviews, setReviews] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$data$2f$mockData$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["INITIAL_REVIEWS"]);
     const [qualityIssues, setQualityIssues] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$data$2f$mockData$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["INITIAL_QUALITY_ISSUES"]);
     const [procurementOpportunities, setProcurementOpportunities] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$data$2f$mockData$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["INITIAL_PROCUREMENT_OPPORTUNITIES"]);
@@ -302,24 +312,30 @@ const AppProvider = ({ children })=>{
     const [models, setModels] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$data$2f$mockData$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["INITIAL_AI_MODELS"]);
     const [notifications, setNotifications] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$data$2f$mockData$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["INITIAL_NOTIFICATIONS"]);
     const [toasts, setToasts] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
-    // Selection states
-    const [selectedMaterialId, setSelectedMaterialId] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('BMG-FST-000001284');
+    /* =======================================================
+     SELECTION STATES
+
+     Removed fake default:
+     BMG-FST-000001284
+  ======================================================= */ const [selectedMaterialId, setSelectedMaterialId] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
     const [selectedCandidateId, setSelectedCandidateId] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('CAND-8492');
     const [selectedCPSEId, setSelectedCPSEId] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
     const [selectedOpportunityId, setSelectedOpportunityId] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('OPP-1042');
     const [selectedIssueId, setSelectedIssueId] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
-    // Modals & Overlays
-    const [isCommandPaletteOpen, setIsCommandPaletteOpen] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
+    /* =======================================================
+     MODALS / OVERLAYS
+  ======================================================= */ const [isCommandPaletteOpen, setIsCommandPaletteOpen] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [isAIAssistantOpen, setIsAIAssistantOpen] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [isSIHDemoOpen, setIsSIHDemoOpen] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [demoStep, setDemoStep] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(0);
-    // Keyboard shortcut Ctrl+K for Global Command Palette
-    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
+    /* =======================================================
+     CTRL + K COMMAND PALETTE
+  ======================================================= */ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "AppProvider.useEffect": ()=>{
             const handleKeyDown = {
                 "AppProvider.useEffect.handleKeyDown": (e)=>{
-                    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
                         e.preventDefault();
                         setIsCommandPaletteOpen({
                             "AppProvider.useEffect.handleKeyDown": (prev)=>!prev
@@ -329,12 +345,15 @@ const AppProvider = ({ children })=>{
             }["AppProvider.useEffect.handleKeyDown"];
             window.addEventListener('keydown', handleKeyDown);
             return ({
-                "AppProvider.useEffect": ()=>window.removeEventListener('keydown', handleKeyDown)
+                "AppProvider.useEffect": ()=>{
+                    window.removeEventListener('keydown', handleKeyDown);
+                }
             })["AppProvider.useEffect"];
         }
     }["AppProvider.useEffect"], []);
-    // Load real material data from Supabase
-    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
+    /* =======================================================
+     LOAD REAL MATERIAL DATA FROM SUPABASE
+  ======================================================= */ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "AppProvider.useEffect": ()=>{
             const loadMaterials = {
                 "AppProvider.useEffect.loadMaterials": async ()=>{
@@ -345,17 +364,72 @@ const AppProvider = ({ children })=>{
                     if (error) {
                         console.error('Failed to load materials:', error);
                         setMaterials([]);
-                    } else {
-                        setMaterials(data || []);
-                        console.log(`Loaded ${data?.length || 0} materials from Supabase`);
+                        setMaterialsLoading(false);
+                        return;
                     }
+                    const loadedMaterials = data || [];
+                    setMaterials(loadedMaterials);
+                    console.log(`Loaded ${loadedMaterials.length} materials from Supabase`);
                     setMaterialsLoading(false);
                 }
             }["AppProvider.useEffect.loadMaterials"];
             loadMaterials();
         }
     }["AppProvider.useEffect"], []);
-    const addToast = (toast)=>{
+    /* =======================================================
+     UPDATE CPSE MATERIAL COUNTS FROM REAL DATABASE
+
+     Only recordsUploaded is derived from Supabase.
+
+     We do NOT invent:
+     - normalized records
+     - matched records
+     - review backlog
+     - quality score
+     - completeness score
+
+     Those become 0 unless actual data exists.
+  ======================================================= */ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
+        "AppProvider.useEffect": ()=>{
+            if (materialsLoading) {
+                return;
+            }
+            const companyCounts = {};
+            materials.forEach({
+                "AppProvider.useEffect": (material)=>{
+                    const company = material.company?.trim().toUpperCase();
+                    if (!company) {
+                        return;
+                    }
+                    companyCounts[company] = (companyCounts[company] || 0) + 1;
+                }
+            }["AppProvider.useEffect"]);
+            setCpses({
+                "AppProvider.useEffect": (prevCpses)=>prevCpses.map({
+                        "AppProvider.useEffect": (cpse)=>{
+                            const code = cpse.code?.trim().toUpperCase();
+                            const actualMaterialCount = companyCounts[code] || 0;
+                            return {
+                                ...cpse,
+                                /* REAL */ recordsUploaded: actualMaterialCount,
+                                /* No real database source yet */ recordsNormalized: 0,
+                                recordsMatched: 0,
+                                reviewBacklog: 0,
+                                /* No real quality data yet */ qualityScore: 0,
+                                completenessRate: 0,
+                                /* Don't claim an upload date when we don't have one */ lastUpload: actualMaterialCount > 0 ? 'Material database connected' : 'No material data available'
+                            };
+                        }
+                    }["AppProvider.useEffect"])
+            }["AppProvider.useEffect"]);
+        }
+    }["AppProvider.useEffect"], [
+        materials,
+        materialsLoading
+    ]);
+    /* =======================================================
+     TOAST FUNCTIONS
+  ======================================================= */ const addToast = (toast)=>{
         const id = 'toast-' + Math.random().toString(36).substring(2, 9);
         const newToast = {
             ...toast,
@@ -370,44 +444,49 @@ const AppProvider = ({ children })=>{
         }, 4500);
     };
     const removeToast = (id)=>{
-        setToasts((prev)=>prev.filter((t)=>t.id !== id));
+        setToasts((prev)=>prev.filter((toast)=>toast.id !== id));
     };
-    const markNotificationAsRead = (id)=>{
-        setNotifications((prev)=>prev.map((n)=>n.id === id ? {
-                    ...n,
+    /* =======================================================
+     NOTIFICATIONS
+  ======================================================= */ const markNotificationAsRead = (id)=>{
+        setNotifications((prev)=>prev.map((notification)=>notification.id === id ? {
+                    ...notification,
                     read: true
-                } : n));
+                } : notification));
     };
-    const openMaterial360 = (bmgId)=>{
+    /* =======================================================
+     MATERIAL 360 NAVIGATION
+  ======================================================= */ const openMaterial360 = (bmgId)=>{
         setSelectedMaterialId(bmgId);
         setCurrentTab('material-360');
     };
-    const openCandidateMatch = (candidateId)=>{
+    /* =======================================================
+     AI MATCH NAVIGATION
+  ======================================================= */ const openCandidateMatch = (candidateId)=>{
         setSelectedCandidateId(candidateId);
         setCurrentTab('ai-match');
     };
-    // Action: Approve Match
-    const approveMatch = (candidateId, note)=>{
+    /* =======================================================
+     APPROVE MATCH
+  ======================================================= */ const approveMatch = (candidateId, note)=>{
         const candidate = candidates.find((c)=>c.id === candidateId);
-        if (!candidate) return;
-        // Update candidate status
-        setCandidates((prev)=>prev.map((c)=>c.id === candidateId ? {
-                    ...c,
+        if (!candidate) {
+            return;
+        }
+        setCandidates((prev)=>prev.map((candidateItem)=>candidateItem.id === candidateId ? {
+                    ...candidateItem,
                     status: 'Approved'
-                } : c));
-        // Update review queue item
-        setReviews((prev)=>prev.map((r)=>r.candidateId === candidateId ? {
-                    ...r,
+                } : candidateItem));
+        setReviews((prev)=>prev.map((review)=>review.candidateId === candidateId ? {
+                    ...review,
                     status: 'Approved',
                     actionNote: note || 'Approved by Officer. Common Material Identity mapped.',
                     actionTakenBy: currentUserRole,
                     actionTakenAt: new Date().toLocaleString('en-IN', {
                         timeZone: 'Asia/Kolkata'
                     }) + ' IST'
-                } : r));
-        // Target or minted BMG ID
-        const targetBmgId = candidate.targetBmgId || 'BMG-FST-000001284';
-        // Add audit event
+                } : review));
+        const targetBmgId = candidate.targetBmgId || 'UNASSIGNED';
         const newAudit = {
             id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
             timestamp: new Date().toLocaleString('en-IN', {
@@ -422,48 +501,41 @@ const AppProvider = ({ children })=>{
             newValue: `Approved Standard Mapping to ${targetBmgId}`,
             reason: note || `Verified engineering equivalence with ${candidate.scores.overallConfidence}% confidence score.`,
             modelVersion: candidate.modelVersion,
-            verificationHash: 'sha256:' + Array.from({
-                length: 64
-            }, ()=>Math.floor(Math.random() * 16).toString(16)).join('')
+            verificationHash: 'NOT_AVAILABLE'
         };
         setAuditEvents((prev)=>[
                 newAudit,
                 ...prev
             ]);
-        // Update CPSE stats
-        setCpses((prev)=>prev.map((cpse)=>{
-                if (cpse.code === candidate.recordA.cpseCode || cpse.code === candidate.recordB.cpseCode) {
-                    return {
-                        ...cpse,
-                        recordsMatched: cpse.recordsMatched + 1,
-                        reviewBacklog: Math.max(0, cpse.reviewBacklog - 1)
-                    };
-                }
-                return cpse;
-            }));
-        addToast({
+        /*
+      We no longer fabricate CPSE matched counts.
+      recordsMatched will remain based on actual data.
+    */ addToast({
             title: 'Candidate Match Approved',
-            message: `Standardized ${candidate.recordA.localCode} & ${candidate.recordB.localCode} into ${targetBmgId}.`,
+            message: `Standardized ${candidate.recordA.localCode} & ${candidate.recordB.localCode}.`,
             type: 'success'
         });
     };
-    // Action: Reject Match
-    const rejectMatch = (candidateId, reason)=>{
+    /* =======================================================
+     REJECT MATCH
+  ======================================================= */ const rejectMatch = (candidateId, reason)=>{
         const candidate = candidates.find((c)=>c.id === candidateId);
-        if (!candidate) return;
-        setCandidates((prev)=>prev.map((c)=>c.id === candidateId ? {
-                    ...c,
+        if (!candidate) {
+            return;
+        }
+        setCandidates((prev)=>prev.map((candidateItem)=>candidateItem.id === candidateId ? {
+                    ...candidateItem,
                     status: 'Rejected'
-                } : c));
-        setReviews((prev)=>prev.map((r)=>r.candidateId === candidateId ? {
-                    ...r,
+                } : candidateItem));
+        setReviews((prev)=>prev.map((review)=>review.candidateId === candidateId ? {
+                    ...review,
                     status: 'Rejected',
                     actionNote: reason || 'Rejected due to engineering specification divergence.',
                     actionTakenBy: currentUserRole,
                     actionTakenAt: new Date().toLocaleString('en-IN', {
                         timeZone: 'Asia/Kolkata'
                     }) + ' IST'
-                } : r));
+                } : review));
         const newAudit = {
             id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
             timestamp: new Date().toLocaleString('en-IN', {
@@ -478,9 +550,7 @@ const AppProvider = ({ children })=>{
             newValue: 'Rejected - Preserved Discrete Inventory Identities',
             reason: reason || candidate.criticalMismatchReason || 'Specification mismatch detected by human officer.',
             modelVersion: candidate.modelVersion,
-            verificationHash: 'sha256:' + Array.from({
-                length: 64
-            }, ()=>Math.floor(Math.random() * 16).toString(16)).join('')
+            verificationHash: 'NOT_AVAILABLE'
         };
         setAuditEvents((prev)=>[
                 newAudit,
@@ -492,117 +562,100 @@ const AppProvider = ({ children })=>{
             type: 'warning'
         });
     };
-    // Action: Request More Data
-    const requestMoreData = (candidateId, note)=>{
-        setCandidates((prev)=>prev.map((c)=>c.id === candidateId ? {
-                    ...c,
+    /* =======================================================
+     REQUEST MORE DATA
+  ======================================================= */ const requestMoreData = (candidateId, note)=>{
+        setCandidates((prev)=>prev.map((candidate)=>candidate.id === candidateId ? {
+                    ...candidate,
                     status: 'Needs More Data'
-                } : c));
-        setReviews((prev)=>prev.map((r)=>r.candidateId === candidateId ? {
-                    ...r,
+                } : candidate));
+        setReviews((prev)=>prev.map((review)=>review.candidateId === candidateId ? {
+                    ...review,
                     status: 'Needs More Data',
-                    actionNote: note || 'Dispatched clarification ticket to CPSE Nodal Master Data Officer.',
+                    actionNote: note || 'Additional engineering data requested.',
                     actionTakenBy: currentUserRole,
                     actionTakenAt: new Date().toLocaleString('en-IN', {
                         timeZone: 'Asia/Kolkata'
                     }) + ' IST'
-                } : r));
+                } : review));
         addToast({
             title: 'Clarification Requested',
-            message: 'Notification sent to CPSE Nodal Officers for additional engineering drawings / MTC.',
+            message: 'Additional engineering data requested.',
             type: 'info'
         });
     };
-    // Action: Defer Match
-    const deferMatch = (candidateId)=>{
-        setCandidates((prev)=>prev.map((c)=>c.id === candidateId ? {
-                    ...c,
+    /* =======================================================
+     DEFER MATCH
+  ======================================================= */ const deferMatch = (candidateId)=>{
+        setCandidates((prev)=>prev.map((candidate)=>candidate.id === candidateId ? {
+                    ...candidate,
                     status: 'Deferred'
-                } : c));
-        setReviews((prev)=>prev.map((r)=>r.candidateId === candidateId ? {
-                    ...r,
+                } : candidate));
+        setReviews((prev)=>prev.map((review)=>review.candidateId === candidateId ? {
+                    ...review,
                     status: 'Deferred'
-                } : r));
+                } : review));
         addToast({
             title: 'Review Deferred',
-            message: 'Item moved to deferred queue for subsequent batch committee review.',
+            message: 'Item moved to deferred review.',
             type: 'info'
         });
     };
-    // Action: Create Common Material
-    const createCommonMaterial = (material)=>{
-        const newId = `BMG-${material.category?.substring(0, 3).toUpperCase() || 'GEN'}-${Math.floor(100000000 + Math.random() * 900000000)}`;
+    /* =======================================================
+     CREATE COMMON MATERIAL
+     
+     NOTE:
+     New common materials are kept locally for now.
+     They are NOT presented as real Supabase records.
+  ======================================================= */ const createCommonMaterial = (material)=>{
+        const newId = `LOCAL-${Date.now()}`;
         const newMaterial = {
             id: newId,
             bmgCode: newId,
-            standardName: material.standardName || 'Standardized Engineering Material',
-            category: material.category || 'Fasteners',
+            standardName: material.standardName || 'Unassigned Material',
+            category: material.category || 'Uncategorized',
             specifications: material.specifications || {
-                material: 'Stainless Steel',
-                grade: 'Standard',
-                uom: 'Nos'
+                material: 'Not Available',
+                grade: 'Not Available',
+                uom: 'Not Available'
             },
             mappings: material.mappings || [],
             status: 'Approved',
-            version: 'v1.0',
+            version: 'Local',
             lastUpdated: new Date().toLocaleString('en-IN', {
                 timeZone: 'Asia/Kolkata'
             }) + ' IST',
             approvedBy: currentUserRole,
             approvedAt: new Date().toISOString().split('T')[0],
-            totalAnnualDemand: material.totalAnnualDemand || 15000,
-            avgUnitPrice: material.avgUnitPrice || 500,
-            potentialSavingsPercent: material.potentialSavingsPercent || 15.0,
-            activeSuppliersCount: material.activeSuppliersCount || 4,
-            authorizedInventory: material.authorizedInventory || 3000,
-            description: material.description || 'Newly minted Bharat Material Grid canonical master record.'
+            totalAnnualDemand: material.totalAnnualDemand || 0,
+            avgUnitPrice: material.avgUnitPrice || 0,
+            potentialSavingsPercent: material.potentialSavingsPercent || 0,
+            activeSuppliersCount: material.activeSuppliersCount || 0,
+            authorizedInventory: material.authorizedInventory || 0,
+            description: material.description || 'No description available.'
         };
         setCommonMaterials((prev)=>[
                 newMaterial,
                 ...prev
             ]);
-        const newAudit = {
-            id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
-            timestamp: new Date().toLocaleString('en-IN', {
-                timeZone: 'Asia/Kolkata'
-            }) + ' IST',
-            user: currentUserRole,
-            userRole: currentUserRole,
-            cpse: 'National Master Data Authority',
-            action: 'Common Material Created',
-            materialId: newId,
-            previousValue: 'None (New Master Entity)',
-            newValue: `${newMaterial.standardName} (${newId})`,
-            reason: 'Authoritative national canonical material catalog addition.',
-            modelVersion: 'BMG-FastText-Transformer-v2.4.1',
-            verificationHash: 'sha256:' + Array.from({
-                length: 64
-            }, ()=>Math.floor(Math.random() * 16).toString(16)).join('')
-        };
-        setAuditEvents((prev)=>[
-                newAudit,
-                ...prev
-            ]);
         addToast({
-            title: 'Canonical Material Created',
-            message: `Minted new national identity: ${newId}`,
+            title: 'Material Created',
+            message: `${newMaterial.standardName} created locally.`,
             type: 'success'
         });
         openMaterial360(newId);
     };
-    // Action: Cleanup rule
-    const executeCleanupRule = (issueId)=>{
+    /* =======================================================
+     CLEANUP RULE
+  ======================================================= */ const executeCleanupRule = (issueId)=>{
         const issue = qualityIssues.find((q)=>q.id === issueId);
-        if (!issue) return;
-        setQualityIssues((prev)=>prev.map((q)=>q.id === issueId ? {
-                    ...q,
+        if (!issue) {
+            return;
+        }
+        setQualityIssues((prev)=>prev.map((issueItem)=>issueItem.id === issueId ? {
+                    ...issueItem,
                     status: 'Resolved'
-                } : q));
-        setCpses((prev)=>prev.map((c)=>c.code === issue.cpseCode ? {
-                    ...c,
-                    qualityScore: Math.min(99.4, +(c.qualityScore + 2.4).toFixed(1)),
-                    completenessRate: Math.min(99.0, +(c.completenessRate + 3.1).toFixed(1))
-                } : c));
+                } : issueItem));
         const newAudit = {
             id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
             timestamp: new Date().toLocaleString('en-IN', {
@@ -614,28 +667,30 @@ const AppProvider = ({ children })=>{
             action: 'Clean-up rule executed',
             materialId: issue.id,
             previousValue: `${issue.affectedRecordsCount} records flagged with ${issue.issueType}`,
-            newValue: 'Rule applied: Automated normalizer resolved non-conformances',
+            newValue: 'Rule applied. Actual remediation count pending database integration.',
             reason: issue.suggestedFix,
-            modelVersion: 'BMG-RuleEngine-v2.4',
-            verificationHash: 'sha256:' + Array.from({
-                length: 64
-            }, ()=>Math.floor(Math.random() * 16).toString(16)).join('')
+            modelVersion: 'Rule Engine',
+            verificationHash: 'NOT_AVAILABLE'
         };
         setAuditEvents((prev)=>[
                 newAudit,
                 ...prev
             ]);
         addToast({
-            title: 'Automated Cleanup Executed',
-            message: `Successfully remediated ${issue.affectedRecordsCount} records for ${issue.cpseCode}.`,
+            title: 'Cleanup Executed',
+            message: `Cleanup action recorded for ${issue.cpseCode}.`,
             type: 'success'
         });
     };
-    const startSIHDemo = ()=>{
+    /* =======================================================
+     SIH DEMO
+  ======================================================= */ const startSIHDemo = ()=>{
         setDemoStep(1);
         setIsSIHDemoOpen(true);
     };
-    return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(AppContext.Provider, {
+    /* =======================================================
+     PROVIDER
+  ======================================================= */ return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(AppContext.Provider, {
         value: {
             currentTab,
             setCurrentTab,
@@ -692,11 +747,11 @@ const AppProvider = ({ children })=>{
         children: children
     }, void 0, false, {
         fileName: "[project]/src/context/AppContext.tsx",
-        lineNumber: 575,
+        lineNumber: 1153,
         columnNumber: 5
     }, ("TURBOPACK compile-time value", void 0));
 };
-_s(AppProvider, "QXLzeZReg5eaqv814slN5+wMu8o=");
+_s(AppProvider, "cPaYevCMmDx6PIp093Zwed+X8jw=");
 _c = AppProvider;
 const useApp = ()=>{
     _s1();

@@ -15,7 +15,7 @@ import { HomeView } from './components/views/HomeView';
 import { DashboardView } from './components/views/DashboardView';
 import { UploadWorkflowView } from './components/views/UploadWorkflowView';
 import { DataQualityView } from './components/views/DataQualityView';
-import { AIMatchCenterView } from './components/views/AIMatchCenterView';
+import AIMatchCenterView from './components/views/AIMatchCenterView';
 import { ReviewQueueView } from './components/views/ReviewQueueView';
 import { CommonMasterView } from './components/views/CommonMasterView';
 import { Material360View } from './components/views/Material360View';
