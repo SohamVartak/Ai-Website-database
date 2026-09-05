@@ -27,6 +27,16 @@ import {
   INITIAL_AI_MODELS,
   INITIAL_NOTIFICATIONS
 } from '../data/mockData';
+import { supabase } from '../../lib/supabase';
+
+export interface DatabaseMaterial {
+  id: number;
+  company: string;
+  material_number: string | null;
+  description: string | null;
+  specifications: string | null;
+  category: string | null;
+}
 
 export interface ToastMessage {
   id: string;
@@ -42,10 +52,11 @@ interface AppContextType {
   setCurrentUserRole: (role: UserRole) => void;
   language: 'EN' | 'HI';
   setLanguage: (lang: 'EN' | 'HI') => void;
-  
+
   // Data entities
   cpses: CPSE[];
   commonMaterials: CommonMaterial[];
+  materials: DatabaseMaterial[];
   candidates: MatchCandidate[];
   reviews: ReviewItem[];
   qualityIssues: QualityIssue[];
@@ -106,6 +117,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Core Data Collections
   const [cpses, setCpses] = useState<CPSE[]>(INITIAL_CPSES);
   const [commonMaterials, setCommonMaterials] = useState<CommonMaterial[]>(INITIAL_COMMON_MATERIALS);
+
+  // Real materials loaded from Supabase
+  const [materials, setMaterials] = useState<DatabaseMaterial[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(true);
+
   const [candidates, setCandidates] = useState<MatchCandidate[]>(INITIAL_CANDIDATES);
   const [reviews, setReviews] = useState<ReviewItem[]>(INITIAL_REVIEWS);
   const [qualityIssues, setQualityIssues] = useState<QualityIssue[]>(INITIAL_QUALITY_ISSUES);
@@ -139,13 +155,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsCommandPaletteOpen(prev => !prev);
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Load real material data from Supabase
+  useEffect(() => {
+    const loadMaterials = async () => {
+      setMaterialsLoading(true);
+
+      const { data, error } = await supabase
+        .from('materials')
+        .select('*')
+        .order('id', { ascending: true });
+
+      if (error) {
+        console.error('Failed to load materials:', error);
+        setMaterials([]);
+      } else {
+        setMaterials(data || []);
+        console.log(`Loaded ${data?.length || 0} materials from Supabase`);
+      }
+
+      setMaterialsLoading(false);
+    };
+
+    loadMaterials();
   }, []);
 
   const addToast = (toast: Omit<ToastMessage, 'id'>) => {
     const id = 'toast-' + Math.random().toString(36).substring(2, 9);
     const newToast: ToastMessage = { ...toast, id };
+
     setToasts(prev => [...prev, newToast]);
 
     setTimeout(() => {
@@ -158,7 +200,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const markNotificationAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    setNotifications(prev =>
+      prev.map(n => n.id === id ? { ...n, read: true } : n)
+    );
   };
 
   const openMaterial360 = (bmgId: string) => {
@@ -177,24 +221,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!candidate) return;
 
     // Update candidate status
-    setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, status: 'Approved' } : c));
+    setCandidates(prev =>
+      prev.map(c =>
+        c.id === candidateId
+          ? { ...c, status: 'Approved' }
+          : c
+      )
+    );
 
     // Update review queue item
-    setReviews(prev => prev.map(r => r.candidateId === candidateId ? {
-      ...r,
-      status: 'Approved',
-      actionNote: note || 'Approved by Officer. Common Material Identity mapped.',
-      actionTakenBy: currentUserRole,
-      actionTakenAt: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST'
-    } : r));
+    setReviews(prev =>
+      prev.map(r =>
+        r.candidateId === candidateId
+          ? {
+              ...r,
+              status: 'Approved',
+              actionNote: note || 'Approved by Officer. Common Material Identity mapped.',
+              actionTakenBy: currentUserRole,
+              actionTakenAt:
+                new Date().toLocaleString('en-IN', {
+                  timeZone: 'Asia/Kolkata'
+                }) + ' IST'
+            }
+          : r
+      )
+    );
 
     // Target or minted BMG ID
-    const targetBmgId = candidate.targetBmgId || `BMG-FST-000001284`;
+    const targetBmgId = candidate.targetBmgId || 'BMG-FST-000001284';
 
     // Add audit event
     const newAudit: AuditEvent = {
       id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
-      timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST',
+      timestamp:
+        new Date().toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata'
+        }) + ' IST',
       user: currentUserRole,
       userRole: currentUserRole,
       cpse: `${candidate.recordA.cpseCode} / ${candidate.recordB.cpseCode}`,
@@ -202,24 +264,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       materialId: targetBmgId,
       previousValue: `Candidate Pair #${candidate.pairNumber} (Pending Review)`,
       newValue: `Approved Standard Mapping to ${targetBmgId}`,
-      reason: note || `Verified engineering equivalence with ${candidate.scores.overallConfidence}% confidence score.`,
+      reason:
+        note ||
+        `Verified engineering equivalence with ${candidate.scores.overallConfidence}% confidence score.`,
       modelVersion: candidate.modelVersion,
-      verificationHash: 'sha256:' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+      verificationHash:
+        'sha256:' +
+        Array.from({ length: 64 }, () =>
+          Math.floor(Math.random() * 16).toString(16)
+        ).join('')
     };
 
     setAuditEvents(prev => [newAudit, ...prev]);
 
     // Update CPSE stats
-    setCpses(prev => prev.map(cpse => {
-      if (cpse.code === candidate.recordA.cpseCode || cpse.code === candidate.recordB.cpseCode) {
-        return {
-          ...cpse,
-          recordsMatched: cpse.recordsMatched + 1,
-          reviewBacklog: Math.max(0, cpse.reviewBacklog - 1)
-        };
-      }
-      return cpse;
-    }));
+    setCpses(prev =>
+      prev.map(cpse => {
+        if (
+          cpse.code === candidate.recordA.cpseCode ||
+          cpse.code === candidate.recordB.cpseCode
+        ) {
+          return {
+            ...cpse,
+            recordsMatched: cpse.recordsMatched + 1,
+            reviewBacklog: Math.max(0, cpse.reviewBacklog - 1)
+          };
+        }
+
+        return cpse;
+      })
+    );
 
     addToast({
       title: 'Candidate Match Approved',
@@ -233,18 +307,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const candidate = candidates.find(c => c.id === candidateId);
     if (!candidate) return;
 
-    setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, status: 'Rejected' } : c));
-    setReviews(prev => prev.map(r => r.candidateId === candidateId ? {
-      ...r,
-      status: 'Rejected',
-      actionNote: reason || 'Rejected due to engineering specification divergence.',
-      actionTakenBy: currentUserRole,
-      actionTakenAt: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST'
-    } : r));
+    setCandidates(prev =>
+      prev.map(c =>
+        c.id === candidateId
+          ? { ...c, status: 'Rejected' }
+          : c
+      )
+    );
+
+    setReviews(prev =>
+      prev.map(r =>
+        r.candidateId === candidateId
+          ? {
+              ...r,
+              status: 'Rejected',
+              actionNote:
+                reason ||
+                'Rejected due to engineering specification divergence.',
+              actionTakenBy: currentUserRole,
+              actionTakenAt:
+                new Date().toLocaleString('en-IN', {
+                  timeZone: 'Asia/Kolkata'
+                }) + ' IST'
+            }
+          : r
+      )
+    );
 
     const newAudit: AuditEvent = {
       id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
-      timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST',
+      timestamp:
+        new Date().toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata'
+        }) + ' IST',
       user: currentUserRole,
       userRole: currentUserRole,
       cpse: `${candidate.recordA.cpseCode} / ${candidate.recordB.cpseCode}`,
@@ -252,9 +347,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       materialId: candidate.id,
       previousValue: `Candidate Pair #${candidate.pairNumber}`,
       newValue: 'Rejected - Preserved Discrete Inventory Identities',
-      reason: reason || candidate.criticalMismatchReason || 'Specification mismatch detected by human officer.',
+      reason:
+        reason ||
+        candidate.criticalMismatchReason ||
+        'Specification mismatch detected by human officer.',
       modelVersion: candidate.modelVersion,
-      verificationHash: 'sha256:' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+      verificationHash:
+        'sha256:' +
+        Array.from({ length: 64 }, () =>
+          Math.floor(Math.random() * 16).toString(16)
+        ).join('')
     };
 
     setAuditEvents(prev => [newAudit, ...prev]);
@@ -268,40 +370,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Action: Request More Data
   const requestMoreData = (candidateId: string, note?: string) => {
-    setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, status: 'Needs More Data' } : c));
-    setReviews(prev => prev.map(r => r.candidateId === candidateId ? {
-      ...r,
-      status: 'Needs More Data',
-      actionNote: note || 'Dispatched clarification ticket to CPSE Nodal Master Data Officer.',
-      actionTakenBy: currentUserRole,
-      actionTakenAt: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST'
-    } : r));
+    setCandidates(prev =>
+      prev.map(c =>
+        c.id === candidateId
+          ? { ...c, status: 'Needs More Data' }
+          : c
+      )
+    );
+
+    setReviews(prev =>
+      prev.map(r =>
+        r.candidateId === candidateId
+          ? {
+              ...r,
+              status: 'Needs More Data',
+              actionNote:
+                note ||
+                'Dispatched clarification ticket to CPSE Nodal Master Data Officer.',
+              actionTakenBy: currentUserRole,
+              actionTakenAt:
+                new Date().toLocaleString('en-IN', {
+                  timeZone: 'Asia/Kolkata'
+                }) + ' IST'
+            }
+          : r
+      )
+    );
 
     addToast({
       title: 'Clarification Requested',
-      message: `Notification sent to CPSE Nodal Officers for additional engineering drawings / MTC.`,
+      message:
+        'Notification sent to CPSE Nodal Officers for additional engineering drawings / MTC.',
       type: 'info'
     });
   };
 
   // Action: Defer Match
   const deferMatch = (candidateId: string) => {
-    setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, status: 'Deferred' } : c));
-    setReviews(prev => prev.map(r => r.candidateId === candidateId ? { ...r, status: 'Deferred' } : r));
+    setCandidates(prev =>
+      prev.map(c =>
+        c.id === candidateId
+          ? { ...c, status: 'Deferred' }
+          : c
+      )
+    );
+
+    setReviews(prev =>
+      prev.map(r =>
+        r.candidateId === candidateId
+          ? { ...r, status: 'Deferred' }
+          : r
+      )
+    );
+
     addToast({
       title: 'Review Deferred',
-      message: 'Item moved to deferred queue for subsequent batch committee review.',
+      message:
+        'Item moved to deferred queue for subsequent batch committee review.',
       type: 'info'
     });
   };
 
   // Action: Create Common Material
   const createCommonMaterial = (material: Partial<CommonMaterial>) => {
-    const newId = `BMG-${material.category?.substring(0, 3).toUpperCase() || 'GEN'}-${Math.floor(100000000 + Math.random() * 900000000)}`;
+    const newId = `BMG-${material.category?.substring(0, 3).toUpperCase() || 'GEN'}-${Math.floor(
+      100000000 + Math.random() * 900000000
+    )}`;
+
     const newMaterial: CommonMaterial = {
       id: newId,
       bmgCode: newId,
-      standardName: material.standardName || 'Standardized Engineering Material',
+      standardName:
+        material.standardName || 'Standardized Engineering Material',
       category: material.category || 'Fasteners',
       specifications: material.specifications || {
         material: 'Stainless Steel',
@@ -311,7 +451,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mappings: material.mappings || [],
       status: 'Approved',
       version: 'v1.0',
-      lastUpdated: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST',
+      lastUpdated:
+        new Date().toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata'
+        }) + ' IST',
       approvedBy: currentUserRole,
       approvedAt: new Date().toISOString().split('T')[0],
       totalAnnualDemand: material.totalAnnualDemand || 15000,
@@ -319,14 +462,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       potentialSavingsPercent: material.potentialSavingsPercent || 15.0,
       activeSuppliersCount: material.activeSuppliersCount || 4,
       authorizedInventory: material.authorizedInventory || 3000,
-      description: material.description || 'Newly minted Bharat Material Grid canonical master record.'
+      description:
+        material.description ||
+        'Newly minted Bharat Material Grid canonical master record.'
     };
 
     setCommonMaterials(prev => [newMaterial, ...prev]);
 
     const newAudit: AuditEvent = {
       id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
-      timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST',
+      timestamp:
+        new Date().toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata'
+        }) + ' IST',
       user: currentUserRole,
       userRole: currentUserRole,
       cpse: 'National Master Data Authority',
@@ -334,9 +482,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       materialId: newId,
       previousValue: 'None (New Master Entity)',
       newValue: `${newMaterial.standardName} (${newId})`,
-      reason: 'Authoritative national canonical material catalog addition.',
+      reason:
+        'Authoritative national canonical material catalog addition.',
       modelVersion: 'BMG-FastText-Transformer-v2.4.1',
-      verificationHash: 'sha256:' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+      verificationHash:
+        'sha256:' +
+        Array.from({ length: 64 }, () =>
+          Math.floor(Math.random() * 16).toString(16)
+        ).join('')
     };
 
     setAuditEvents(prev => [newAudit, ...prev]);
@@ -355,27 +508,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const issue = qualityIssues.find(q => q.id === issueId);
     if (!issue) return;
 
-    setQualityIssues(prev => prev.map(q => q.id === issueId ? { ...q, status: 'Resolved' } : q));
+    setQualityIssues(prev =>
+      prev.map(q =>
+        q.id === issueId
+          ? { ...q, status: 'Resolved' }
+          : q
+      )
+    );
 
-    setCpses(prev => prev.map(c => c.code === issue.cpseCode ? {
-      ...c,
-      qualityScore: Math.min(99.4, +(c.qualityScore + 2.4).toFixed(1)),
-      completenessRate: Math.min(99.0, +(c.completenessRate + 3.1).toFixed(1))
-    } : c));
+    setCpses(prev =>
+      prev.map(c =>
+        c.code === issue.cpseCode
+          ? {
+              ...c,
+              qualityScore: Math.min(
+                99.4,
+                +(c.qualityScore + 2.4).toFixed(1)
+              ),
+              completenessRate: Math.min(
+                99.0,
+                +(c.completenessRate + 3.1).toFixed(1)
+              )
+            }
+          : c
+      )
+    );
 
     const newAudit: AuditEvent = {
       id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
-      timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST',
+      timestamp:
+        new Date().toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata'
+        }) + ' IST',
       user: currentUserRole,
       userRole: currentUserRole,
       cpse: issue.cpseCode,
       action: 'Clean-up rule executed',
       materialId: issue.id,
       previousValue: `${issue.affectedRecordsCount} records flagged with ${issue.issueType}`,
-      newValue: 'Rule applied: Automated normalizer resolved non-conformances',
+      newValue:
+        'Rule applied: Automated normalizer resolved non-conformances',
       reason: issue.suggestedFix,
       modelVersion: 'BMG-RuleEngine-v2.4',
-      verificationHash: 'sha256:' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+      verificationHash:
+        'sha256:' +
+        Array.from({ length: 64 }, () =>
+          Math.floor(Math.random() * 16).toString(16)
+        ).join('')
     };
 
     setAuditEvents(prev => [newAudit, ...prev]);
@@ -401,8 +580,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUserRole,
         language,
         setLanguage,
+
         cpses,
         commonMaterials,
+        materials,
         candidates,
         reviews,
         qualityIssues,
@@ -413,6 +594,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         models,
         notifications,
         toasts,
+
         selectedMaterialId,
         setSelectedMaterialId,
         selectedCandidateId,
@@ -423,6 +605,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedOpportunityId,
         selectedIssueId,
         setSelectedIssueId,
+
         isCommandPaletteOpen,
         setIsCommandPaletteOpen,
         isNotificationsOpen,
@@ -433,6 +616,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsSIHDemoOpen,
         demoStep,
         setDemoStep,
+
         approveMatch,
         rejectMatch,
         requestMoreData,
@@ -454,8 +638,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 export const useApp = () => {
   const context = useContext(AppContext);
+
   if (!context) {
     throw new Error('useApp must be used within an AppProvider');
   }
+
   return context;
 };
