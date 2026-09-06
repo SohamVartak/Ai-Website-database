@@ -78,7 +78,14 @@ interface AppContextType {
   cpses: CPSE[];
   commonMaterials: CommonMaterial[];
   materials: DatabaseMaterial[];
+  filteredMaterials: DatabaseMaterial[];
   materialsLoading: boolean;
+
+  /* Company filter */
+  companyOptions: string[];
+  selectedCompany: string;
+  setSelectedCompany: (company: string) => void;
+
   candidates: MatchCandidate[];
   reviews: ReviewItem[];
   qualityIssues: QualityIssue[];
@@ -128,26 +135,45 @@ interface AppContextType {
   requestMoreData: (candidateId: string, note?: string) => void;
   deferMatch: (candidateId: string) => void;
 
-  createCommonMaterial: (material: Partial<CommonMaterial>) => void;
+  createCommonMaterial: (
+    material: Partial<CommonMaterial>
+  ) => void;
 
-  executeCleanupRule: (issueId: string) => void;
+  executeCleanupRule: (
+    issueId: string
+  ) => void;
 
-  addToast: (toast: Omit<ToastMessage, 'id'>) => void;
-  removeToast: (id: string) => void;
+  addToast: (
+    toast: Omit<ToastMessage, 'id'>
+  ) => void;
 
-  markNotificationAsRead: (id: string) => void;
+  removeToast: (
+    id: string
+  ) => void;
+
+  markNotificationAsRead: (
+    id: string
+  ) => void;
 
   startSIHDemo: () => void;
 
-  openMaterial360: (bmgId: string) => void;
-  openCandidateMatch: (candidateId: string) => void;
+  openMaterial360: (
+    bmgId: string
+  ) => void;
+
+  openCandidateMatch: (
+    candidateId: string
+  ) => void;
 }
 
 /* =========================================================
    CONTEXT
 ========================================================= */
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+const AppContext =
+  createContext<AppContextType | undefined>(
+    undefined
+  );
 
 /* =========================================================
    PROVIDER
@@ -165,7 +191,9 @@ export const AppProvider: React.FC<{
     useState<TabType>('home');
 
   const [currentUserRole, setCurrentUserRole] =
-    useState<UserRole>('National Administrator');
+    useState<UserRole>(
+      'National Administrator'
+    );
 
   const [language, setLanguage] =
     useState<'EN' | 'HI'>('EN');
@@ -176,14 +204,18 @@ export const AppProvider: React.FC<{
   ======================================================= */
 
   const [cpses, setCpses] =
-    useState<CPSE[]>(INITIAL_CPSES);
+    useState<CPSE[]>(
+      INITIAL_CPSES
+    );
 
   /*
     commonMaterials is kept empty because the material catalog
     now comes directly from the real Supabase materials table.
   */
   const [commonMaterials, setCommonMaterials] =
-    useState<CommonMaterial[]>([]);
+    useState<CommonMaterial[]>(
+      []
+    );
 
 
   /* =======================================================
@@ -191,10 +223,142 @@ export const AppProvider: React.FC<{
   ======================================================= */
 
   const [materials, setMaterials] =
-    useState<DatabaseMaterial[]>([]);
+    useState<DatabaseMaterial[]>(
+      []
+    );
 
   const [materialsLoading, setMaterialsLoading] =
     useState(true);
+
+
+  /* =======================================================
+     COMPANY FILTER
+  ======================================================= */
+
+  /*
+    "ALL COMPANIES" is the universal option.
+
+    New companies uploaded to Supabase automatically appear
+    in companyOptions because the options are generated from:
+
+    1. Existing INITIAL_CPSES
+    2. Actual company names in materials table
+  */
+  const [selectedCompany, setSelectedCompany] =
+    useState<string>(
+      'ALL COMPANIES'
+    );
+
+
+  /* =======================================================
+     COMPANY OPTIONS
+  ======================================================= */
+
+  const companyOptions =
+    React.useMemo(() => {
+
+      const companySet =
+        new Set<string>();
+
+      /*
+        Preserve existing CPSE/company options.
+      */
+      INITIAL_CPSES.forEach(
+        cpse => {
+
+          const code =
+            cpse.code
+              ?.trim()
+              .toUpperCase();
+
+          if (code) {
+            companySet.add(
+              code
+            );
+          }
+        }
+      );
+
+      /*
+        Add every company actually found
+        in the Supabase materials table.
+      */
+      materials.forEach(
+        material => {
+
+          const company =
+            material.company
+              ?.trim()
+              .toUpperCase();
+
+          if (company) {
+            companySet.add(
+              company
+            );
+          }
+        }
+      );
+
+      /*
+        Universal option always comes first.
+      */
+      return [
+        'ALL COMPANIES',
+        ...Array.from(
+          companySet
+        ).sort()
+      ];
+
+    }, [materials]);
+
+
+  /* =======================================================
+     FILTERED MATERIALS
+  ======================================================= */
+
+  /*
+    IMPORTANT:
+
+    materials = complete raw database result.
+
+    filteredMaterials = view based on selectedCompany.
+
+    We NEVER modify or delete materials when filtering.
+  */
+  const filteredMaterials =
+    React.useMemo(() => {
+
+      if (
+        selectedCompany ===
+        'ALL COMPANIES'
+      ) {
+        return materials;
+      }
+
+      const normalizedSelectedCompany =
+        selectedCompany
+          .trim()
+          .toUpperCase();
+
+      return materials.filter(
+        material => {
+
+          const company =
+            material.company
+              ?.trim()
+              .toUpperCase();
+
+          return (
+            company ===
+            normalizedSelectedCompany
+          );
+        }
+      );
+
+    }, [
+      materials,
+      selectedCompany
+    ]);
 
 
   /* =======================================================
@@ -202,13 +366,19 @@ export const AppProvider: React.FC<{
   ======================================================= */
 
   const [candidates, setCandidates] =
-    useState<MatchCandidate[]>(INITIAL_CANDIDATES);
+    useState<MatchCandidate[]>(
+      INITIAL_CANDIDATES
+    );
 
   const [reviews, setReviews] =
-    useState<ReviewItem[]>(INITIAL_REVIEWS);
+    useState<ReviewItem[]>(
+      INITIAL_REVIEWS
+    );
 
   const [qualityIssues, setQualityIssues] =
-    useState<QualityIssue[]>(INITIAL_QUALITY_ISSUES);
+    useState<QualityIssue[]>(
+      INITIAL_QUALITY_ISSUES
+    );
 
   const [procurementOpportunities, setProcurementOpportunities] =
     useState<ProcurementOpportunity[]>(
@@ -216,22 +386,34 @@ export const AppProvider: React.FC<{
     );
 
   const [auditEvents, setAuditEvents] =
-    useState<AuditEvent[]>(INITIAL_AUDIT_EVENTS);
+    useState<AuditEvent[]>(
+      INITIAL_AUDIT_EVENTS
+    );
 
   const [rules, setRules] =
-    useState<StandardizationRule[]>(INITIAL_RULES);
+    useState<StandardizationRule[]>(
+      INITIAL_RULES
+    );
 
   const [dictionary, setDictionary] =
-    useState<DomainDictionaryItem[]>(INITIAL_DICTIONARY);
+    useState<DomainDictionaryItem[]>(
+      INITIAL_DICTIONARY
+    );
 
   const [models, setModels] =
-    useState<AIModelVersion[]>(INITIAL_AI_MODELS);
+    useState<AIModelVersion[]>(
+      INITIAL_AI_MODELS
+    );
 
   const [notifications, setNotifications] =
-    useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+    useState<NotificationItem[]>(
+      INITIAL_NOTIFICATIONS
+    );
 
   const [toasts, setToasts] =
-    useState<ToastMessage[]>([]);
+    useState<ToastMessage[]>(
+      []
+    );
 
 
   /* =======================================================
@@ -239,19 +421,29 @@ export const AppProvider: React.FC<{
   ======================================================= */
 
   const [selectedMaterialId, setSelectedMaterialId] =
-    useState<string | null>(null);
+    useState<string | null>(
+      null
+    );
 
   const [selectedCandidateId, setSelectedCandidateId] =
-    useState<string | null>('CAND-8492');
+    useState<string | null>(
+      'CAND-8492'
+    );
 
   const [selectedCPSEId, setSelectedCPSEId] =
-    useState<string | null>(null);
+    useState<string | null>(
+      null
+    );
 
   const [selectedOpportunityId, setSelectedOpportunityId] =
-    useState<string | null>('OPP-1042');
+    useState<string | null>(
+      'OPP-1042'
+    );
 
   const [selectedIssueId, setSelectedIssueId] =
-    useState<string | null>(null);
+    useState<string | null>(
+      null
+    );
 
 
   /* =======================================================
@@ -259,19 +451,29 @@ export const AppProvider: React.FC<{
   ======================================================= */
 
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] =
-    useState<boolean>(false);
+    useState<boolean>(
+      false
+    );
 
   const [isNotificationsOpen, setIsNotificationsOpen] =
-    useState<boolean>(false);
+    useState<boolean>(
+      false
+    );
 
   const [isAIAssistantOpen, setIsAIAssistantOpen] =
-    useState<boolean>(false);
+    useState<boolean>(
+      false
+    );
 
   const [isSIHDemoOpen, setIsSIHDemoOpen] =
-    useState<boolean>(false);
+    useState<boolean>(
+      false
+    );
 
   const [demoStep, setDemoStep] =
-    useState<number>(0);
+    useState<number>(
+      0
+    );
 
 
   /* =======================================================
@@ -279,29 +481,39 @@ export const AppProvider: React.FC<{
   ======================================================= */
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+
+    const handleKeyDown = (
+      e: KeyboardEvent
+    ) => {
 
       if (
         (e.ctrlKey || e.metaKey) &&
         e.key.toLowerCase() === 'k'
       ) {
+
         e.preventDefault();
 
-        setIsCommandPaletteOpen(prev => !prev);
+        setIsCommandPaletteOpen(
+          prev => !prev
+        );
       }
     };
+
 
     window.addEventListener(
       'keydown',
       handleKeyDown
     );
 
+
     return () => {
+
       window.removeEventListener(
         'keydown',
         handleKeyDown
       );
     };
+
   }, []);
 
 
@@ -317,127 +529,168 @@ export const AppProvider: React.FC<{
 
   useEffect(() => {
 
-    const loadMaterials = async () => {
+    const loadMaterials =
+      async () => {
 
-      setMaterialsLoading(true);
+        setMaterialsLoading(
+          true
+        );
 
-      try {
+        try {
 
-        const pageSize = 1000;
-        let from = 0;
+          const pageSize =
+            1000;
 
-        const allMaterials: DatabaseMaterial[] = [];
+          let from = 0;
 
-        while (true) {
-
-          const to = from + pageSize - 1;
-
-          const {
-            data,
-            error
-          } = await supabase
-            .from('materials')
-            .select(
-              'id, company, material_number, description, specifications, category'
-            )
-            .order('id', {
-              ascending: true
-            })
-            .range(from, to);
+          const allMaterials:
+            DatabaseMaterial[] =
+              [];
 
 
-          if (error) {
+          while (true) {
 
-            console.error(
-              'Failed to load materials:',
+            const to =
+              from +
+              pageSize -
+              1;
+
+
+            const {
+              data,
               error
+            } =
+              await supabase
+                .from('materials')
+                .select(
+                  'id, company, material_number, description, specifications, category'
+                )
+                .order(
+                  'id',
+                  {
+                    ascending: true
+                  }
+                )
+                .range(
+                  from,
+                  to
+                );
+
+
+            if (error) {
+
+              console.error(
+                'Failed to load materials:',
+                error
+              );
+
+              setMaterials(
+                []
+              );
+
+              break;
+            }
+
+
+            const currentPage =
+              (data || []) as DatabaseMaterial[];
+
+
+            allMaterials.push(
+              ...currentPage
             );
 
-            setMaterials([]);
 
-            break;
+            console.log(
+              `Loaded page starting at ${from}: ${currentPage.length} records`
+            );
+
+
+            /*
+              If this page contains fewer than 1000 records,
+              we have reached the end of the table.
+            */
+            if (
+              currentPage.length <
+              pageSize
+            ) {
+              break;
+            }
+
+
+            from +=
+              pageSize;
           }
 
 
-          const currentPage =
-            (data || []) as DatabaseMaterial[];
-
-
-          allMaterials.push(
-            ...currentPage
+          setMaterials(
+            allMaterials
           );
 
 
           console.log(
-            `Loaded page starting at ${from}: ${currentPage.length} records`
+            `Total materials loaded from Supabase: ${allMaterials.length}`
           );
 
 
           /*
-            If this page contains fewer than 1000 records,
-            we have reached the end of the table.
+            Helpful company breakdown in browser console.
           */
-          if (
-            currentPage.length < pageSize
-          ) {
-            break;
-          }
+          const companyCounts:
+            Record<
+              string,
+              number
+            > = {};
 
 
-          from += pageSize;
+          allMaterials.forEach(
+            material => {
+
+              const company =
+                material.company
+                  ?.trim()
+                  .toUpperCase();
+
+              if (!company) {
+                return;
+              }
+
+
+              companyCounts[
+                company
+              ] =
+                (
+                  companyCounts[
+                    company
+                  ] || 0
+                ) + 1;
+            }
+          );
+
+
+          console.log(
+            'Company material counts:',
+            companyCounts
+          );
+
+        } catch (error) {
+
+          console.error(
+            'Unexpected error while loading materials:',
+            error
+          );
+
+          setMaterials(
+            []
+          );
+
+        } finally {
+
+          setMaterialsLoading(
+            false
+          );
         }
-
-
-        setMaterials(
-          allMaterials
-        );
-
-
-        console.log(
-          `Total materials loaded from Supabase: ${allMaterials.length}`
-        );
-
-
-        /*
-          Helpful company breakdown in browser console.
-        */
-        const companyCounts: Record<string, number> = {};
-
-        allMaterials.forEach(material => {
-
-          const company =
-            material.company
-              ?.trim()
-              .toUpperCase();
-
-          if (!company) {
-            return;
-          }
-
-          companyCounts[company] =
-            (companyCounts[company] || 0) + 1;
-        });
-
-
-        console.log(
-          'Company material counts:',
-          companyCounts
-        );
-
-      } catch (error) {
-
-        console.error(
-          'Unexpected error while loading materials:',
-          error
-        );
-
-        setMaterials([]);
-
-      } finally {
-
-        setMaterialsLoading(false);
-      }
-    };
+      };
 
 
     loadMaterials();
@@ -446,72 +699,123 @@ export const AppProvider: React.FC<{
 
 
   /* =======================================================
+     KEEP SELECTED COMPANY VALID
+  ======================================================= */
+
+  useEffect(() => {
+
+    /*
+      If a company was selected but that company disappears
+      from the available options, safely return to ALL COMPANIES.
+    */
+    if (
+      !companyOptions.includes(
+        selectedCompany
+      )
+    ) {
+
+      setSelectedCompany(
+        'ALL COMPANIES'
+      );
+    }
+
+  }, [
+    companyOptions,
+    selectedCompany
+  ]);
+
+
+  /* =======================================================
      UPDATE CPSE MATERIAL COUNTS FROM REAL DATABASE
   ======================================================= */
 
   useEffect(() => {
 
-    if (materialsLoading) {
+    if (
+      materialsLoading
+    ) {
       return;
     }
 
-    const companyCounts: Record<string, number> = {};
 
-    materials.forEach(material => {
-
-      const company =
-        material.company
-          ?.trim()
-          .toUpperCase();
-
-      if (!company) {
-        return;
-      }
-
-      companyCounts[company] =
-        (companyCounts[company] || 0) + 1;
-    });
+    const companyCounts:
+      Record<
+        string,
+        number
+      > = {};
 
 
-    setCpses(prevCpses =>
-      prevCpses.map(cpse => {
+    materials.forEach(
+      material => {
 
-        const code =
-          cpse.code
+        const company =
+          material.company
             ?.trim()
             .toUpperCase();
 
-        const actualMaterialCount =
-          companyCounts[code] || 0;
+        if (!company) {
+          return;
+        }
 
 
-        return {
-          ...cpse,
+        companyCounts[
+          company
+        ] =
+          (
+            companyCounts[
+              company
+            ] || 0
+          ) + 1;
+      }
+    );
 
-          recordsUploaded:
-            actualMaterialCount,
 
-          recordsNormalized:
-            0,
+    setCpses(
+      prevCpses =>
+        prevCpses.map(
+          cpse => {
 
-          recordsMatched:
-            0,
+            const code =
+              cpse.code
+                ?.trim()
+                .toUpperCase();
 
-          reviewBacklog:
-            0,
 
-          qualityScore:
-            0,
+            const actualMaterialCount =
+              companyCounts[
+                code
+              ] || 0;
 
-          completenessRate:
-            0,
 
-          lastUpload:
-            actualMaterialCount > 0
-              ? 'Material database connected'
-              : 'No material data available'
-        };
-      })
+            return {
+              ...cpse,
+
+              recordsUploaded:
+                actualMaterialCount,
+
+              recordsNormalized:
+                0,
+
+              recordsMatched:
+                0,
+
+              reviewBacklog:
+                0,
+
+              qualityScore:
+                0,
+
+              completenessRate:
+                0,
+
+              lastUpload:
+                actualMaterialCount >
+                0
+                  ? 'Material database connected'
+                  : 'No material data available'
+            };
+          }
+        )
     );
 
   }, [
@@ -525,7 +829,10 @@ export const AppProvider: React.FC<{
   ======================================================= */
 
   const addToast = (
-    toast: Omit<ToastMessage, 'id'>
+    toast: Omit<
+      ToastMessage,
+      'id'
+    >
   ) => {
 
     const id =
@@ -535,21 +842,29 @@ export const AppProvider: React.FC<{
         .substring(2, 9);
 
 
-    const newToast: ToastMessage = {
-      ...toast,
-      id
-    };
+    const newToast:
+      ToastMessage = {
+        ...toast,
+        id
+      };
 
 
-    setToasts(prev => [
-      ...prev,
-      newToast
-    ]);
+    setToasts(
+      prev => [
+        ...prev,
+        newToast
+      ]
+    );
 
 
-    setTimeout(() => {
-      removeToast(id);
-    }, 4500);
+    setTimeout(
+      () => {
+        removeToast(
+          id
+        );
+      },
+      4500
+    );
   };
 
 
@@ -557,10 +872,13 @@ export const AppProvider: React.FC<{
     id: string
   ) => {
 
-    setToasts(prev =>
-      prev.filter(
-        toast => toast.id !== id
-      )
+    setToasts(
+      prev =>
+        prev.filter(
+          toast =>
+            toast.id !==
+            id
+        )
     );
   };
 
@@ -573,15 +891,18 @@ export const AppProvider: React.FC<{
     id: string
   ) => {
 
-    setNotifications(prev =>
-      prev.map(notification =>
-        notification.id === id
-          ? {
-              ...notification,
-              read: true
-            }
-          : notification
-      )
+    setNotifications(
+      prev =>
+        prev.map(
+          notification =>
+            notification.id ===
+            id
+              ? {
+                  ...notification,
+                  read: true
+                }
+              : notification
+        )
     );
   };
 
@@ -633,54 +954,64 @@ export const AppProvider: React.FC<{
 
     const candidate =
       candidates.find(
-        c => c.id === candidateId
+        c =>
+          c.id ===
+          candidateId
       );
+
 
     if (!candidate) {
       return;
     }
 
 
-    setCandidates(prev =>
-      prev.map(candidateItem =>
-        candidateItem.id === candidateId
-          ? {
-              ...candidateItem,
-              status:
-                'Approved'
-            }
-          : candidateItem
-      )
+    setCandidates(
+      prev =>
+        prev.map(
+          candidateItem =>
+            candidateItem.id ===
+            candidateId
+              ? {
+                  ...candidateItem,
+                  status:
+                    'Approved'
+                }
+              : candidateItem
+        )
     );
 
 
-    setReviews(prev =>
-      prev.map(review =>
-        review.candidateId === candidateId
-          ? {
-              ...review,
+    setReviews(
+      prev =>
+        prev.map(
+          review =>
+            review.candidateId ===
+            candidateId
+              ? {
+                  ...review,
 
-              status:
-                'Approved',
+                  status:
+                    'Approved',
 
-              actionNote:
-                note ||
-                'Approved by Officer. Common Material Identity mapped.',
+                  actionNote:
+                    note ||
+                    'Approved by Officer. Common Material Identity mapped.',
 
-              actionTakenBy:
-                currentUserRole,
+                  actionTakenBy:
+                    currentUserRole,
 
-              actionTakenAt:
-                new Date().toLocaleString(
-                  'en-IN',
-                  {
-                    timeZone:
-                      'Asia/Kolkata'
-                  }
-                ) + ' IST'
-            }
-          : review
-      )
+                  actionTakenAt:
+                    new Date().toLocaleString(
+                      'en-IN',
+                      {
+                        timeZone:
+                          'Asia/Kolkata'
+                      }
+                    ) +
+                    ' IST'
+                }
+              : review
+        )
     );
 
 
@@ -689,62 +1020,66 @@ export const AppProvider: React.FC<{
       'UNASSIGNED';
 
 
-    const newAudit: AuditEvent = {
+    const newAudit:
+      AuditEvent = {
 
-      id:
-        'AUD-' +
-        Math.floor(
-          1000 +
-          Math.random() *
-            9000
-        ),
+        id:
+          'AUD-' +
+          Math.floor(
+            1000 +
+            Math.random() *
+              9000
+          ),
 
-      timestamp:
-        new Date().toLocaleString(
-          'en-IN',
-          {
-            timeZone:
-              'Asia/Kolkata'
-          }
-        ) + ' IST',
+        timestamp:
+          new Date().toLocaleString(
+            'en-IN',
+            {
+              timeZone:
+                'Asia/Kolkata'
+            }
+          ) +
+          ' IST',
 
-      user:
-        currentUserRole,
+        user:
+          currentUserRole,
 
-      userRole:
-        currentUserRole,
+        userRole:
+          currentUserRole,
 
-      cpse:
-        `${candidate.recordA.cpseCode} / ${candidate.recordB.cpseCode}`,
+        cpse:
+          `${candidate.recordA.cpseCode} / ${candidate.recordB.cpseCode}`,
 
-      action:
-        'Material mapping approved',
+        action:
+          'Material mapping approved',
 
-      materialId:
-        targetBmgId,
+        materialId:
+          targetBmgId,
 
-      previousValue:
-        `Candidate Pair #${candidate.pairNumber} (Pending Review)`,
+        previousValue:
+          `Candidate Pair #${candidate.pairNumber} (Pending Review)`,
 
-      newValue:
-        `Approved Standard Mapping to ${targetBmgId}`,
+        newValue:
+          `Approved Standard Mapping to ${targetBmgId}`,
 
-      reason:
-        note ||
-        `Verified engineering equivalence with ${candidate.scores.overallConfidence}% confidence score.`,
+        reason:
+          note ||
+          `Verified engineering equivalence with ${candidate.scores.overallConfidence}% confidence score.`,
 
-      modelVersion:
-        candidate.modelVersion,
+        modelVersion:
+          candidate.modelVersion,
 
-      verificationHash:
-        'NOT_AVAILABLE'
-    };
+        verificationHash:
+          'NOT_AVAILABLE'
+      };
 
 
-    setAuditEvents(prev => [
-      newAudit,
-      ...prev
-    ]);
+    setAuditEvents(
+      prev => [
+        newAudit,
+        ...prev
+      ]
+    );
 
 
     addToast({
@@ -772,114 +1107,128 @@ export const AppProvider: React.FC<{
 
     const candidate =
       candidates.find(
-        c => c.id === candidateId
+        c =>
+          c.id ===
+          candidateId
       );
+
 
     if (!candidate) {
       return;
     }
 
 
-    setCandidates(prev =>
-      prev.map(candidateItem =>
-        candidateItem.id === candidateId
-          ? {
-              ...candidateItem,
-              status:
-                'Rejected'
-            }
-          : candidateItem
-      )
+    setCandidates(
+      prev =>
+        prev.map(
+          candidateItem =>
+            candidateItem.id ===
+            candidateId
+              ? {
+                  ...candidateItem,
+                  status:
+                    'Rejected'
+                }
+              : candidateItem
+        )
     );
 
 
-    setReviews(prev =>
-      prev.map(review =>
-        review.candidateId === candidateId
-          ? {
-              ...review,
+    setReviews(
+      prev =>
+        prev.map(
+          review =>
+            review.candidateId ===
+            candidateId
+              ? {
+                  ...review,
 
-              status:
-                'Rejected',
+                  status:
+                    'Rejected',
 
-              actionNote:
-                reason ||
-                'Rejected due to engineering specification divergence.',
+                  actionNote:
+                    reason ||
+                    'Rejected due to engineering specification divergence.',
 
-              actionTakenBy:
-                currentUserRole,
+                  actionTakenBy:
+                    currentUserRole,
 
-              actionTakenAt:
-                new Date().toLocaleString(
-                  'en-IN',
-                  {
-                    timeZone:
-                      'Asia/Kolkata'
-                  }
-                ) + ' IST'
-            }
-          : review
-      )
+                  actionTakenAt:
+                    new Date().toLocaleString(
+                      'en-IN',
+                      {
+                        timeZone:
+                          'Asia/Kolkata'
+                      }
+                    ) +
+                    ' IST'
+                }
+              : review
+        )
     );
 
 
-    const newAudit: AuditEvent = {
+    const newAudit:
+      AuditEvent = {
 
-      id:
-        'AUD-' +
-        Math.floor(
-          1000 +
-          Math.random() *
-            9000
-        ),
+        id:
+          'AUD-' +
+          Math.floor(
+            1000 +
+            Math.random() *
+              9000
+          ),
 
-      timestamp:
-        new Date().toLocaleString(
-          'en-IN',
-          {
-            timeZone:
-              'Asia/Kolkata'
-          }
-        ) + ' IST',
+        timestamp:
+          new Date().toLocaleString(
+            'en-IN',
+            {
+              timeZone:
+                'Asia/Kolkata'
+            }
+          ) +
+          ' IST',
 
-      user:
-        currentUserRole,
+        user:
+          currentUserRole,
 
-      userRole:
-        currentUserRole,
+        userRole:
+          currentUserRole,
 
-      cpse:
-        `${candidate.recordA.cpseCode} / ${candidate.recordB.cpseCode}`,
+        cpse:
+          `${candidate.recordA.cpseCode} / ${candidate.recordB.cpseCode}`,
 
-      action:
-        'Match rejected',
+        action:
+          'Match rejected',
 
-      materialId:
-        candidate.id,
+        materialId:
+          candidate.id,
 
-      previousValue:
-        `Candidate Pair #${candidate.pairNumber}`,
+        previousValue:
+          `Candidate Pair #${candidate.pairNumber}`,
 
-      newValue:
-        'Rejected - Preserved Discrete Inventory Identities',
+        newValue:
+          'Rejected - Preserved Discrete Inventory Identities',
 
-      reason:
-        reason ||
-        candidate.criticalMismatchReason ||
-        'Specification mismatch detected by human officer.',
+        reason:
+          reason ||
+          candidate.criticalMismatchReason ||
+          'Specification mismatch detected by human officer.',
 
-      modelVersion:
-        candidate.modelVersion,
+        modelVersion:
+          candidate.modelVersion,
 
-      verificationHash:
-        'NOT_AVAILABLE'
-    };
+        verificationHash:
+          'NOT_AVAILABLE'
+      };
 
 
-    setAuditEvents(prev => [
-      newAudit,
-      ...prev
-    ]);
+    setAuditEvents(
+      prev => [
+        newAudit,
+        ...prev
+      ]
+    );
 
 
     addToast({
@@ -905,46 +1254,53 @@ export const AppProvider: React.FC<{
     note?: string
   ) => {
 
-    setCandidates(prev =>
-      prev.map(candidate =>
-        candidate.id === candidateId
-          ? {
-              ...candidate,
-              status:
-                'Needs More Data'
-            }
-          : candidate
-      )
+    setCandidates(
+      prev =>
+        prev.map(
+          candidate =>
+            candidate.id ===
+            candidateId
+              ? {
+                  ...candidate,
+                  status:
+                    'Needs More Data'
+                }
+              : candidate
+        )
     );
 
 
-    setReviews(prev =>
-      prev.map(review =>
-        review.candidateId === candidateId
-          ? {
-              ...review,
+    setReviews(
+      prev =>
+        prev.map(
+          review =>
+            review.candidateId ===
+            candidateId
+              ? {
+                  ...review,
 
-              status:
-                'Needs More Data',
+                  status:
+                    'Needs More Data',
 
-              actionNote:
-                note ||
-                'Additional engineering data requested.',
+                  actionNote:
+                    note ||
+                    'Additional engineering data requested.',
 
-              actionTakenBy:
-                currentUserRole,
+                  actionTakenBy:
+                    currentUserRole,
 
-              actionTakenAt:
-                new Date().toLocaleString(
-                  'en-IN',
-                  {
-                    timeZone:
-                      'Asia/Kolkata'
-                  }
-                ) + ' IST'
-            }
-          : review
-      )
+                  actionTakenAt:
+                    new Date().toLocaleString(
+                      'en-IN',
+                      {
+                        timeZone:
+                          'Asia/Kolkata'
+                      }
+                    ) +
+                    ' IST'
+                }
+              : review
+        )
     );
 
 
@@ -970,29 +1326,35 @@ export const AppProvider: React.FC<{
     candidateId: string
   ) => {
 
-    setCandidates(prev =>
-      prev.map(candidate =>
-        candidate.id === candidateId
-          ? {
-              ...candidate,
-              status:
-                'Deferred'
-            }
-          : candidate
-      )
+    setCandidates(
+      prev =>
+        prev.map(
+          candidate =>
+            candidate.id ===
+            candidateId
+              ? {
+                  ...candidate,
+                  status:
+                    'Deferred'
+                }
+              : candidate
+        )
     );
 
 
-    setReviews(prev =>
-      prev.map(review =>
-        review.candidateId === candidateId
-          ? {
-              ...review,
-              status:
-                'Deferred'
-            }
-          : review
-      )
+    setReviews(
+      prev =>
+        prev.map(
+          review =>
+            review.candidateId ===
+            candidateId
+              ? {
+                  ...review,
+                  status:
+                    'Deferred'
+                }
+              : review
+        )
     );
 
 
@@ -1022,7 +1384,8 @@ export const AppProvider: React.FC<{
       `LOCAL-${Date.now()}`;
 
 
-    const newMaterial: CommonMaterial = {
+    const newMaterial:
+      CommonMaterial = {
 
       id:
         newId,
@@ -1068,7 +1431,8 @@ export const AppProvider: React.FC<{
             timeZone:
               'Asia/Kolkata'
           }
-        ) + ' IST',
+        ) +
+        ' IST',
 
       approvedBy:
         currentUserRole,
@@ -1104,10 +1468,12 @@ export const AppProvider: React.FC<{
     };
 
 
-    setCommonMaterials(prev => [
-      newMaterial,
-      ...prev
-    ]);
+    setCommonMaterials(
+      prev => [
+        newMaterial,
+        ...prev
+      ]
+    );
 
 
     addToast({
@@ -1139,28 +1505,35 @@ export const AppProvider: React.FC<{
 
     const issue =
       qualityIssues.find(
-        q => q.id === issueId
+        q =>
+          q.id ===
+          issueId
       );
+
 
     if (!issue) {
       return;
     }
 
 
-    setQualityIssues(prev =>
-      prev.map(issueItem =>
-        issueItem.id === issueId
-          ? {
-              ...issueItem,
-              status:
-                'Resolved'
-            }
-          : issueItem
-      )
+    setQualityIssues(
+      prev =>
+        prev.map(
+          issueItem =>
+            issueItem.id ===
+            issueId
+              ? {
+                  ...issueItem,
+                  status:
+                    'Resolved'
+                }
+              : issueItem
+        )
     );
 
 
-    const newAudit: AuditEvent = {
+    const newAudit:
+      AuditEvent = {
 
       id:
         'AUD-' +
@@ -1177,7 +1550,8 @@ export const AppProvider: React.FC<{
             timeZone:
               'Asia/Kolkata'
           }
-        ) + ' IST',
+        ) +
+        ' IST',
 
       user:
         currentUserRole,
@@ -1211,10 +1585,12 @@ export const AppProvider: React.FC<{
     };
 
 
-    setAuditEvents(prev => [
-      newAudit,
-      ...prev
-    ]);
+    setAuditEvents(
+      prev => [
+        newAudit,
+        ...prev
+      ]
+    );
 
 
     addToast({
@@ -1237,9 +1613,13 @@ export const AppProvider: React.FC<{
 
   const startSIHDemo = () => {
 
-    setDemoStep(1);
+    setDemoStep(
+      1
+    );
 
-    setIsSIHDemoOpen(true);
+    setIsSIHDemoOpen(
+      true
+    );
   };
 
 
@@ -1266,7 +1646,15 @@ export const AppProvider: React.FC<{
 
         materials,
 
+        filteredMaterials,
+
         materialsLoading,
+
+        companyOptions,
+
+        selectedCompany,
+
+        setSelectedCompany,
 
         candidates,
 
@@ -1356,7 +1744,9 @@ export const AppProvider: React.FC<{
 export const useApp = () => {
 
   const context =
-    useContext(AppContext);
+    useContext(
+      AppContext
+    );
 
   if (!context) {
 

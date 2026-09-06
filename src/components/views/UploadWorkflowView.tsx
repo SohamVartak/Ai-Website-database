@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { motion } from 'motion/react';
 import { supabase } from '../../../lib/supabase';
 import { useApp } from '../../context/AppContext';
+
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -18,6 +19,7 @@ import {
   Cpu,
   ShieldCheck,
   XCircle,
+  Layers,
 } from 'lucide-react';
 
 /* =========================================================
@@ -70,24 +72,317 @@ const STANDARD_FIELDS = [
 const NORMALIZATION_BATCH_SIZE = 20;
 
 /* =========================================================
+   COMPANY HEADER NAMES
+========================================================= */
+
+const COMPANY_HEADER_NAMES = [
+  'company',
+  'company name',
+  'cpse',
+  'cpse code',
+  'cpse name',
+  'organization',
+  'organisation',
+  'organization name',
+  'organisation name',
+  'enterprise',
+  'enterprise name',
+];
+
+/* =========================================================
+   COMPANY ALIASES
+========================================================= */
+
+const COMPANY_ALIASES: Record<string, string> = {
+  'IOCL': 'IOCL',
+  'INDIAN OIL': 'IOCL',
+  'INDIAN OIL CORPORATION': 'IOCL',
+  'INDIAN OIL CORPORATION LIMITED': 'IOCL',
+  'INDIAN OIL HALDIA': 'IOCL',
+  'INDIAN OIL HALDIA REFINERY': 'IOCL',
+  'INDIAN OIL (HALDIA REFINERY)': 'IOCL',
+
+  'BPCL': 'BPCL',
+  'BHARAT PETROLEUM': 'BPCL',
+  'BHARAT PETROLEUM CORPORATION': 'BPCL',
+  'BHARAT PETROLEUM CORPORATION LIMITED': 'BPCL',
+
+  'HPCL': 'HPCL',
+  'HINDUSTAN PETROLEUM': 'HPCL',
+  'HINDUSTAN PETROLEUM CORPORATION': 'HPCL',
+  'HINDUSTAN PETROLEUM CORPORATION LIMITED': 'HPCL',
+
+  'BHEL': 'BHEL',
+  'BHARAT HEAVY ELECTRICALS': 'BHEL',
+  'BHARAT HEAVY ELECTRICALS LIMITED': 'BHEL',
+
+  'ONGC': 'ONGC',
+  'OIL AND NATURAL GAS CORPORATION':
+    'ONGC',
+  'OIL AND NATURAL GAS CORPORATION LIMITED':
+    'ONGC',
+
+  'NTPC': 'NTPC',
+  'NTPC LIMITED': 'NTPC',
+
+  'SAIL': 'SAIL',
+  'STEEL AUTHORITY OF INDIA':
+    'SAIL',
+  'STEEL AUTHORITY OF INDIA LIMITED':
+    'SAIL',
+
+  'GAIL': 'GAIL',
+  'GAIL INDIA': 'GAIL',
+  'GAIL INDIA LIMITED':
+    'GAIL',
+
+  'CIL': 'CIL',
+  'COAL INDIA': 'CIL',
+  'COAL INDIA LIMITED':
+    'CIL',
+
+  'CPCL': 'CPCL',
+  'CHENNAI PETROLEUM CORPORATION':
+    'CPCL',
+  'CHENNAI PETROLEUM CORPORATION LIMITED':
+    'CPCL',
+};
+
+/* =========================================================
+   FIND COMPANY COLUMN
+========================================================= */
+
+function findCompanyColumn(
+  headers: string[]
+): string | null {
+
+  /*
+   * First try exact matches.
+   */
+  for (const header of headers) {
+
+    const normalized =
+      header
+        .trim()
+        .toLowerCase();
+
+    if (
+      COMPANY_HEADER_NAMES.includes(
+        normalized
+      )
+    ) {
+      return header;
+    }
+  }
+
+  /*
+   * Then try partial matches.
+   */
+  for (const header of headers) {
+
+    const normalized =
+      header
+        .trim()
+        .toLowerCase();
+
+    if (
+      normalized.includes('company') ||
+      normalized.includes('cpse') ||
+      normalized.includes('organization') ||
+      normalized.includes('organisation') ||
+      normalized.includes('enterprise')
+    ) {
+      return header;
+    }
+  }
+
+  return null;
+}
+
+/* =========================================================
+   NORMALIZE COMPANY NAME
+========================================================= */
+
+function normalizeCompanyName(
+  value: unknown
+): string | null {
+
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
+
+  const original =
+    String(value)
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  if (!original) {
+    return null;
+  }
+
+  const normalized =
+    original
+      .toUpperCase()
+      .trim();
+
+  /*
+   * Direct alias.
+   */
+  if (
+    COMPANY_ALIASES[
+      normalized
+    ]
+  ) {
+    return COMPANY_ALIASES[
+      normalized
+    ];
+  }
+
+  /*
+   * Already known company code.
+   */
+  const knownCodes = [
+    'IOCL',
+    'ONGC',
+    'BPCL',
+    'NTPC',
+    'SAIL',
+    'GAIL',
+    'BHEL',
+    'CIL',
+    'CPCL',
+    'HPCL',
+  ];
+
+  if (
+    knownCodes.includes(
+      normalized
+    )
+  ) {
+    return normalized;
+  }
+
+  /*
+   * Flexible matching.
+   */
+  if (
+    normalized.includes(
+      'INDIAN OIL'
+    )
+  ) {
+    return 'IOCL';
+  }
+
+  if (
+    normalized.includes(
+      'BHARAT PETROLEUM'
+    )
+  ) {
+    return 'BPCL';
+  }
+
+  if (
+    normalized.includes(
+      'HINDUSTAN PETROLEUM'
+    )
+  ) {
+    return 'HPCL';
+  }
+
+  if (
+    normalized.includes(
+      'BHARAT HEAVY ELECTRICALS'
+    )
+  ) {
+    return 'BHEL';
+  }
+
+  if (
+    normalized.includes(
+      'OIL AND NATURAL GAS'
+    )
+  ) {
+    return 'ONGC';
+  }
+
+  if (
+    normalized.includes(
+      'STEEL AUTHORITY OF INDIA'
+    )
+  ) {
+    return 'SAIL';
+  }
+
+  if (
+    normalized.includes(
+      'COAL INDIA'
+    )
+  ) {
+    return 'CIL';
+  }
+
+  if (
+    normalized.includes(
+      'CHENNAI PETROLEUM'
+    )
+  ) {
+    return 'CPCL';
+  }
+
+  if (
+    normalized.includes(
+      'GAIL'
+    )
+  ) {
+    return 'GAIL';
+  }
+
+  if (
+    normalized.includes(
+      'NTPC'
+    )
+  ) {
+    return 'NTPC';
+  }
+
+  /*
+   * Unknown company:
+   * preserve the source company text rather
+   * than inventing a company code.
+   */
+  return original;
+}
+
+/* =========================================================
    COMPONENT
 ========================================================= */
 
 export const UploadWorkflowView: React.FC = () => {
+
   const {
     cpses,
     addToast,
     setCurrentTab,
+    companyOptions,
   } = useApp();
+
 
   /* =======================================================
      WIZARD
   ======================================================= */
 
-  const [step, setStep] = useState(1);
+  const [step, setStep] =
+    useState(1);
 
+  /*
+   * Default is ALL COMPANIES.
+   */
   const [selectedCPSE, setSelectedCPSE] =
-    useState('IOCL');
+    useState('ALL COMPANIES');
+
 
   /* =======================================================
      FILE
@@ -102,6 +397,7 @@ export const UploadWorkflowView: React.FC = () => {
   const [isDragging, setIsDragging] =
     useState(false);
 
+
   /* =======================================================
      RAW DATA
   ======================================================= */
@@ -112,6 +408,7 @@ export const UploadWorkflowView: React.FC = () => {
   const [sourceRows, setSourceRows] =
     useState<SourceRow[]>([]);
 
+
   /* =======================================================
      AI MAPPING
   ======================================================= */
@@ -119,12 +416,14 @@ export const UploadWorkflowView: React.FC = () => {
   const [mappings, setMappings] =
     useState<Mapping[]>([]);
 
+
   /* =======================================================
      STANDARDIZED DATA
   ======================================================= */
 
   const [standardizedRows, setStandardizedRows] =
     useState<StandardizedRow[]>([]);
+
 
   /* =======================================================
      PROCESSING
@@ -142,6 +441,7 @@ export const UploadWorkflowView: React.FC = () => {
   const [isImporting, setIsImporting] =
     useState(false);
 
+
   /* =======================================================
      VALIDATION
   ======================================================= */
@@ -152,6 +452,7 @@ export const UploadWorkflowView: React.FC = () => {
   const [validationWarnings, setValidationWarnings] =
     useState<string[]>([]);
 
+
   /* =======================================================
      IMPORT RESULT
   ======================================================= */
@@ -159,17 +460,101 @@ export const UploadWorkflowView: React.FC = () => {
   const [insertedCount, setInsertedCount] =
     useState(0);
 
+
   /* =========================================================
      COMPANY COUNTS
   ========================================================= */
 
   const companyRecords = useMemo(() => {
-    return cpses.map((cpse) => ({
-      ...cpse,
-      recordsUploaded:
-        cpse.recordsUploaded || 0,
-    }));
+
+    return cpses.map(
+      (cpse) => ({
+        ...cpse,
+        recordsUploaded:
+          cpse.recordsUploaded ||
+          0,
+      })
+    );
+
   }, [cpses]);
+
+
+  /* =========================================================
+     UPLOAD COMPANY OPTIONS
+  ========================================================= */
+
+  const uploadCompanyOptions =
+    useMemo(() => {
+
+      const result: string[] = [];
+
+      /*
+       * ALL COMPANIES must always be first.
+       */
+      result.push(
+        'ALL COMPANIES'
+      );
+
+
+      /*
+       * Existing company codes.
+       */
+      companyRecords.forEach(
+        (company) => {
+
+          const code =
+            company.code
+              ?.trim()
+              .toUpperCase();
+
+          if (
+            code &&
+            !result.includes(
+              code
+            )
+          ) {
+            result.push(code);
+          }
+
+        }
+      );
+
+
+      /*
+       * Dynamically loaded companies.
+       */
+      companyOptions.forEach(
+        (company) => {
+
+          const normalized =
+            company
+              ?.trim()
+              .toUpperCase();
+
+          if (
+            normalized &&
+            normalized !==
+              'ALL COMPANIES' &&
+            !result.includes(
+              normalized
+            )
+          ) {
+            result.push(
+              normalized
+            );
+          }
+
+        }
+      );
+
+
+      return result;
+
+    }, [
+      companyRecords,
+      companyOptions,
+    ]);
+
 
   /* =========================================================
      CSV PARSER
@@ -178,65 +563,103 @@ export const UploadWorkflowView: React.FC = () => {
   const parseCSV = (
     text: string
   ): SourceRow[] => {
-    const rows: string[][] = [];
 
-    let currentRow: string[] = [];
-    let currentValue = '';
-    let insideQuotes = false;
+    const rows: string[][] =
+      [];
+
+    let currentRow: string[] =
+      [];
+
+    let currentValue =
+      '';
+
+    let insideQuotes =
+      false;
+
 
     for (
       let i = 0;
       i < text.length;
       i++
     ) {
-      const char = text[i];
-      const next = text[i + 1];
+
+      const char =
+        text[i];
+
+      const next =
+        text[i + 1];
+
 
       if (
         char === '"' &&
         insideQuotes &&
         next === '"'
       ) {
+
         currentValue += '"';
+
         i++;
+
         continue;
       }
 
-      if (char === '"') {
-        insideQuotes = !insideQuotes;
+
+      if (
+        char === '"'
+      ) {
+
+        insideQuotes =
+          !insideQuotes;
+
         continue;
       }
+
 
       if (
         char === ',' &&
         !insideQuotes
       ) {
+
         currentRow.push(
           currentValue.trim()
         );
 
-        currentValue = '';
+        currentValue =
+          '';
+
         continue;
       }
 
+
       if (
-        (char === '\n' ||
-          char === '\r') &&
+        (
+          char === '\n' ||
+          char === '\r'
+        ) &&
         !insideQuotes
       ) {
+
         if (
-          currentValue.length > 0 ||
-          currentRow.length > 0
+          currentValue.length >
+            0 ||
+          currentRow.length >
+            0
         ) {
+
           currentRow.push(
             currentValue.trim()
           );
 
-          rows.push(currentRow);
+          rows.push(
+            currentRow
+          );
 
           currentRow = [];
-          currentValue = '';
+
+          currentValue =
+            '';
         }
+
 
         if (
           char === '\r' &&
@@ -248,60 +671,103 @@ export const UploadWorkflowView: React.FC = () => {
         continue;
       }
 
-      currentValue += char;
+
+      currentValue +=
+        char;
     }
 
+
     if (
-      currentValue.length > 0 ||
-      currentRow.length > 0
+      currentValue.length >
+        0 ||
+      currentRow.length >
+        0
     ) {
+
       currentRow.push(
         currentValue.trim()
       );
 
-      rows.push(currentRow);
+      rows.push(
+        currentRow
+      );
     }
 
-    if (rows.length === 0) {
+
+    if (
+      rows.length ===
+      0
+    ) {
+
       setSourceHeaders([]);
+
       return [];
     }
 
-    const headers = rows[0].map(
-      (header, index) => {
-        const cleaned =
-          header.trim();
 
-        return (
-          cleaned ||
-          `Unnamed Column ${index + 1}`
-        );
-      }
+    const headers =
+      rows[0].map(
+        (
+          header,
+          index
+        ) => {
+
+          const cleaned =
+            header.trim();
+
+          return (
+            cleaned ||
+            `Unnamed Column ${index + 1}`
+          );
+
+        }
+      );
+
+
+    setSourceHeaders(
+      headers
     );
 
-    setSourceHeaders(headers);
 
     return rows
       .slice(1)
-      .filter((row) =>
-        row.some(
-          (value) =>
-            value.trim() !== ''
-        )
+      .filter(
+        row =>
+          row.some(
+            value =>
+              value.trim() !==
+              ''
+          )
       )
-      .map((row) => {
-        const objectRow: SourceRow = {};
+      .map(
+        row => {
 
-        headers.forEach(
-          (header, index) => {
-            objectRow[header] =
-              row[index] || '';
-          }
-        );
+          const objectRow:
+            SourceRow = {};
 
-        return objectRow;
-      });
+
+          headers.forEach(
+            (
+              header,
+              index
+            ) => {
+
+              objectRow[
+                header
+              ] =
+                row[index] ||
+                '';
+
+            }
+          );
+
+
+          return objectRow;
+
+        }
+      );
   };
+
 
   /* =========================================================
      EXCEL HEADER SCORING
@@ -310,6 +776,7 @@ export const UploadWorkflowView: React.FC = () => {
   const scoreHeaderRow = (
     row: unknown[]
   ): number => {
+
     const keywords = [
       'material',
       'material code',
@@ -338,227 +805,347 @@ export const UploadWorkflowView: React.FC = () => {
       'part no',
       'code',
       'sap',
+      'company',
+      'company name',
+      'cpse',
+      'organization',
+      'organisation',
+      'enterprise',
     ];
 
-    const cells = row.map((cell) =>
-      String(cell ?? '')
-        .trim()
-        .toLowerCase()
-    );
 
-    let score = 0;
+    const cells =
+      row.map(
+        cell =>
+          String(
+            cell ?? ''
+          )
+            .trim()
+            .toLowerCase()
+      );
+
+
+    let score =
+      0;
+
 
     const nonEmptyCells =
       cells.filter(
-        (cell) => cell !== ''
+        cell =>
+          cell !== ''
       ).length;
 
+
     if (
-      nonEmptyCells >= 2
+      nonEmptyCells >=
+      2
     ) {
-      score += Math.min(
-        nonEmptyCells,
-        8
-      );
+
+      score +=
+        Math.min(
+          nonEmptyCells,
+          8
+        );
     }
 
-    cells.forEach((cell) => {
-      if (!cell) return;
 
-      const exact =
-        keywords.some(
-          (keyword) =>
-            cell === keyword
-        );
+    cells.forEach(
+      cell => {
 
-      const contains =
-        keywords.some(
-          (keyword) =>
-            cell.includes(keyword)
-        );
+        if (!cell) {
+          return;
+        }
 
-      if (exact) {
-        score += 5;
-      } else if (contains) {
-        score += 2;
+
+        const exact =
+          keywords.some(
+            keyword =>
+              cell === keyword
+          );
+
+
+        const contains =
+          keywords.some(
+            keyword =>
+              cell.includes(
+                keyword
+              )
+          );
+
+
+        if (exact) {
+
+          score += 5;
+
+        } else if (
+          contains
+        ) {
+
+          score += 2;
+        }
+
       }
-    });
+    );
+
 
     if (
-      cells.length === 1 &&
-      cells[0].length > 20
+      cells.length ===
+        1 &&
+      cells[0].length >
+        20
     ) {
+
       score -= 5;
     }
 
+
     return score;
   };
+
 
   /* =========================================================
      EXCEL PARSER
   ========================================================= */
 
-  const parseExcel = async (
-    file: File
-  ): Promise<SourceRow[]> => {
-    const arrayBuffer =
-      await file.arrayBuffer();
+  const parseExcel =
+    async (
+      file: File
+    ): Promise<SourceRow[]> => {
 
-    const workbook =
-      XLSX.read(arrayBuffer, {
-        type: 'array',
-        cellDates: false,
-        raw: false,
-      });
+      const arrayBuffer =
+        await file.arrayBuffer();
 
-    const firstSheetName =
-      workbook.SheetNames[0];
 
-    if (!firstSheetName) {
-      throw new Error(
-        'The Excel workbook does not contain any worksheets.'
-      );
-    }
-
-    const worksheet =
-      workbook.Sheets[
-        firstSheetName
-      ];
-
-    const rawRows =
-      XLSX.utils.sheet_to_json<
-        unknown[]
-      >(worksheet, {
-        header: 1,
-        defval: '',
-        raw: false,
-      });
-
-    if (
-      !rawRows ||
-      rawRows.length === 0
-    ) {
-      setSourceHeaders([]);
-      return [];
-    }
-
-    /* =====================================================
-       FIND REAL HEADER ROW
-    ===================================================== */
-
-    let bestHeaderIndex = 0;
-    let bestScore = -Infinity;
-
-    const searchLimit = Math.min(
-      rawRows.length,
-      30
-    );
-
-    for (
-      let rowIndex = 0;
-      rowIndex < searchLimit;
-      rowIndex++
-    ) {
-      const score =
-        scoreHeaderRow(
-          rawRows[rowIndex]
+      const workbook =
+        XLSX.read(
+          arrayBuffer,
+          {
+            type: 'array',
+            cellDates: false,
+            raw: false,
+          }
         );
 
-      if (score > bestScore) {
-        bestScore = score;
-        bestHeaderIndex =
-          rowIndex;
+
+      const firstSheetName =
+        workbook.SheetNames[0];
+
+
+      if (
+        !firstSheetName
+      ) {
+
+        throw new Error(
+          'The Excel workbook does not contain any worksheets.'
+        );
       }
-    }
 
-    const headerRow =
-      rawRows[bestHeaderIndex];
 
-    /* =====================================================
-       BUILD CLEAN UNIQUE HEADERS
-    ===================================================== */
+      const worksheet =
+        workbook.Sheets[
+          firstSheetName
+        ];
 
-    const headers: string[] = [];
-    const usedHeaders =
-      new Set<string>();
 
-    headerRow.forEach(
-      (cell, index) => {
-        let header =
-          String(cell ?? '')
-            .trim();
+      const rawRows =
+        XLSX.utils.sheet_to_json<
+          unknown[]
+        >(
+          worksheet,
+          {
+            header: 1,
+            defval: '',
+            raw: false,
+          }
+        );
 
-        if (!header) {
-          header =
-            `Unnamed Column ${
-              index + 1
-            }`;
-        }
 
-        let uniqueHeader =
-          header;
+      if (
+        !rawRows ||
+        rawRows.length ===
+          0
+      ) {
 
-        let counter = 2;
+        setSourceHeaders([]);
 
-        while (
-          usedHeaders.has(
-            uniqueHeader
-          )
+        return [];
+      }
+
+
+      /*
+       * Find actual header.
+       */
+      let bestHeaderIndex =
+        0;
+
+      let bestScore =
+        -Infinity;
+
+
+      const searchLimit =
+        Math.min(
+          rawRows.length,
+          30
+        );
+
+
+      for (
+        let rowIndex = 0;
+        rowIndex <
+        searchLimit;
+        rowIndex++
+      ) {
+
+        const score =
+          scoreHeaderRow(
+            rawRows[rowIndex]
+          );
+
+
+        if (
+          score >
+          bestScore
         ) {
-          uniqueHeader =
-            `${header}_${counter}`;
 
-          counter++;
+          bestScore =
+            score;
+
+          bestHeaderIndex =
+            rowIndex;
         }
-
-        usedHeaders.add(
-          uniqueHeader
-        );
-
-        headers.push(
-          uniqueHeader
-        );
       }
-    );
 
-    setSourceHeaders(headers);
 
-    /* =====================================================
-       CONVERT DATA ROWS
-    ===================================================== */
+      const headerRow =
+        rawRows[
+          bestHeaderIndex
+        ];
 
-    const dataRows =
-      rawRows
-        .slice(
-          bestHeaderIndex + 1
-        )
-        .filter((row) =>
-          row.some(
-            (value) =>
-              String(
-                value ?? ''
-              ).trim() !== ''
+
+      /*
+       * Clean unique headers.
+       */
+      const headers:
+        string[] = [];
+
+      const usedHeaders =
+        new Set<string>();
+
+
+      headerRow.forEach(
+        (
+          cell,
+          index
+        ) => {
+
+          let header =
+            String(
+              cell ?? ''
+            ).trim();
+
+
+          if (!header) {
+
+            header =
+              `Unnamed Column ${
+                index + 1
+              }`;
+          }
+
+
+          let uniqueHeader =
+            header;
+
+          let counter =
+            2;
+
+
+          while (
+            usedHeaders.has(
+              uniqueHeader
+            )
+          ) {
+
+            uniqueHeader =
+              `${header}_${counter}`;
+
+            counter++;
+          }
+
+
+          usedHeaders.add(
+            uniqueHeader
+          );
+
+          headers.push(
+            uniqueHeader
+          );
+
+        }
+      );
+
+
+      setSourceHeaders(
+        headers
+      );
+
+
+      /*
+       * Convert remaining rows.
+       */
+      const dataRows =
+        rawRows
+          .slice(
+            bestHeaderIndex +
+              1
           )
-        )
-        .map((row) => {
-          const objectRow: SourceRow = {};
+          .filter(
+            row =>
+              row.some(
+                value =>
+                  String(
+                    value ??
+                      ''
+                  ).trim() !==
+                  ''
+              )
+          )
+          .map(
+            row => {
 
-          headers.forEach(
-            (header, columnIndex) => {
-              objectRow[header] =
-                String(
-                  row[
-                    columnIndex
-                  ] ?? ''
-                ).trim();
+              const objectRow:
+                SourceRow = {};
+
+
+              headers.forEach(
+                (
+                  header,
+                  columnIndex
+                ) => {
+
+                  objectRow[
+                    header
+                  ] =
+                    String(
+                      row[
+                        columnIndex
+                      ] ??
+                        ''
+                    ).trim();
+
+                }
+              );
+
+
+              return objectRow;
+
             }
           );
 
-          return objectRow;
-        });
 
-    return dataRows;
-  };
+      return dataRows;
+    };
+
 
   /* =========================================================
      HANDLE FILE
@@ -567,111 +1154,186 @@ export const UploadWorkflowView: React.FC = () => {
   const handleFile = async (
     file: File
   ) => {
+
     const extension =
       file.name
         .toLowerCase()
         .split('.')
-        .pop() || '';
+        .pop() ||
+      '';
 
-    const supportedExtensions = [
-      'csv',
-      'xlsx',
-      'xls',
-    ];
+
+    const supportedExtensions =
+      [
+        'csv',
+        'xlsx',
+        'xls',
+      ];
+
 
     if (
       !supportedExtensions.includes(
         extension
       )
     ) {
+
       addToast({
+
         title:
           'Unsupported File',
+
         message:
           'Please upload an Excel (.xlsx/.xls) or CSV file.',
-        type: 'error',
+
+        type:
+          'error',
+
       });
 
       return;
     }
 
-    setSelectedFile(file);
-    setFileName(file.name);
+
+    setSelectedFile(
+      file
+    );
+
+    setFileName(
+      file.name
+    );
+
 
     try {
-      let rows: SourceRow[] = [];
+
+      let rows:
+        SourceRow[] = [];
+
 
       if (
-        extension === 'csv'
+        extension ===
+        'csv'
       ) {
+
         const text =
           await file.text();
 
         rows =
-          parseCSV(text);
+          parseCSV(
+            text
+          );
+
       } else {
+
         rows =
           await parseExcel(
             file
           );
       }
 
-      if (rows.length === 0) {
+
+      if (
+        rows.length ===
+        0
+      ) {
+
         throw new Error(
           'No usable data rows were found in the uploaded file.'
         );
       }
 
-      setSourceRows(rows);
 
-      setMappings([]);
+      setSourceRows(
+        rows
+      );
+
+
+      setMappings(
+        []
+      );
+
 
       setStandardizedRows(
         []
       );
 
+
       setValidationErrors(
         []
       );
+
 
       setValidationWarnings(
         []
       );
 
-      setInsertedCount(0);
+
+      setInsertedCount(
+        0
+      );
+
 
       setNormalizationProgress(
         0
       );
 
+
       addToast({
+
         title:
           'Dataset Loaded',
-        message: `${rows.length.toLocaleString()} rows detected from ${file.name}`,
-        type: 'success',
+
+        message:
+          `${rows.length.toLocaleString()} rows detected from ${file.name}`,
+
+        type:
+          'success',
+
       });
-    } catch (error) {
+
+    } catch (
+      error
+    ) {
+
       console.error(
         'File parsing error:',
         error
       );
 
-      setSelectedFile(null);
-      setFileName('');
-      setSourceRows([]);
-      setSourceHeaders([]);
+
+      setSelectedFile(
+        null
+      );
+
+      setFileName(
+        ''
+      );
+
+      setSourceRows(
+        []
+      );
+
+      setSourceHeaders(
+        []
+      );
+
 
       addToast({
+
         title:
           'File Read Failed',
+
         message:
           error instanceof Error
             ? error.message
             : 'The uploaded file could not be read.',
-        type: 'error',
+
+        type:
+          'error',
+
       });
     }
   };
+
 
   /* =========================================================
      AI SCHEMA MAPPING
@@ -679,60 +1341,86 @@ export const UploadWorkflowView: React.FC = () => {
 
   const analyzeSchema =
     async (): Promise<boolean> => {
+
       if (
         !selectedFile ||
-        sourceRows.length === 0
+        sourceRows.length ===
+          0
       ) {
+
         addToast({
-          title: 'No Data',
+
+          title:
+            'No Data',
+
           message:
             'Upload a CSV or Excel file containing material records first.',
-          type: 'warning',
+
+          type:
+            'warning',
+
         });
 
         return false;
       }
 
-      setIsAnalyzing(true);
+
+      setIsAnalyzing(
+        true
+      );
+
 
       try {
+
         const sampleRows =
           sourceRows.slice(
             0,
             8
           );
 
+
         const response =
           await fetch(
             '/api/analyze-csv',
             {
-              method: 'POST',
+              method:
+                'POST',
 
               headers: {
                 'Content-Type':
                   'application/json',
               },
 
-              body: JSON.stringify({
-                company:
-                  selectedCPSE,
+              body:
+                JSON.stringify({
 
-                headers:
-                  sourceHeaders,
+                  company:
+                    selectedCPSE,
 
-                sampleRows,
-              }),
+                  headers:
+                    sourceHeaders,
+
+                  sampleRows,
+
+                }),
+
             }
           );
 
-        if (!response.ok) {
+
+        if (
+          !response.ok
+        ) {
+
           throw new Error(
             `AI schema analysis failed (${response.status})`
           );
         }
 
+
         const result =
           await response.json();
+
 
         const aiMappings =
           Array.isArray(
@@ -741,63 +1429,95 @@ export const UploadWorkflowView: React.FC = () => {
             ? result.mappings
             : [];
 
+
         if (
           aiMappings.length ===
           0
         ) {
+
           throw new Error(
             'The AI endpoint returned no mappings.'
           );
         }
 
+
         setMappings(
           aiMappings
         );
 
-        setStep(3);
+
+        setStep(
+          3
+        );
+
 
         addToast({
+
           title:
             'AI Schema Analysis Complete',
 
-          message: `${aiMappings.length} source columns analyzed.`,
+          message:
+            `${aiMappings.length} source columns analyzed.`,
 
-          type: 'success',
+          type:
+            'success',
+
         });
 
+
         return true;
-      } catch (error) {
+
+      } catch (
+        error
+      ) {
+
         console.error(
           'AI schema mapping error:',
           error
         );
+
 
         const fallback =
           createFallbackMappings(
             sourceHeaders
           );
 
+
         setMappings(
           fallback
         );
 
-        setStep(3);
+
+        setStep(
+          3
+        );
+
 
         addToast({
+
           title:
             'Fallback Mapping Used',
 
           message:
             'The AI schema service was unavailable, so local schema detection was used.',
 
-          type: 'warning',
+          type:
+            'warning',
+
         });
 
+
         return true;
+
       } finally {
-        setIsAnalyzing(false);
+
+        setIsAnalyzing(
+          false
+        );
+
       }
     };
+
 
   /* =========================================================
      BUILD BASIC MAPPED ROWS
@@ -805,32 +1525,134 @@ export const UploadWorkflowView: React.FC = () => {
 
   const buildMappedRows =
     (): StandardizedRow[] => {
-      const mappingLookup: Record<
-        string,
-        string
-      > = {};
+
+      const mappingLookup:
+        Record<
+          string,
+          string
+        > = {};
+
 
       mappings.forEach(
-        (mapping) => {
+        mapping => {
+
           if (
             mapping.targetColumn &&
             mapping.targetColumn !==
               'unmapped'
           ) {
+
             mappingLookup[
               mapping.sourceColumn
             ] =
               mapping.targetColumn;
           }
+
         }
       );
 
+
+      /*
+       * Find Company column only in
+       * ALL COMPANIES mode.
+       */
+      const companyColumn =
+        selectedCPSE ===
+        'ALL COMPANIES'
+          ? findCompanyColumn(
+              sourceHeaders
+            )
+          : null;
+
+
+      /*
+       * Mixed-company files MUST have
+       * a Company column.
+       */
+      if (
+        selectedCPSE ===
+          'ALL COMPANIES' &&
+        !companyColumn
+      ) {
+
+        throw new Error(
+          'ALL COMPANIES requires a Company column in the uploaded Excel/CSV file.'
+        );
+      }
+
+
       return sourceRows.map(
-        (row) => {
-          const standardized: StandardizedRow =
+        (
+          row,
+          rowIndex
+        ) => {
+
+          let rowCompany:
+            string | null =
+              null;
+
+
+          /* =================================================
+             SINGLE COMPANY MODE
+          ================================================= */
+
+          if (
+            selectedCPSE !==
+            'ALL COMPANIES'
+          ) {
+
+            rowCompany =
+              selectedCPSE;
+
+          }
+
+
+          /* =================================================
+             ALL COMPANIES MODE
+          ================================================= */
+
+          if (
+            selectedCPSE ===
+            'ALL COMPANIES'
+          ) {
+
+            const rawCompany =
+              companyColumn
+                ? row[
+                    companyColumn
+                  ]
+                : '';
+
+
+            rowCompany =
+              normalizeCompanyName(
+                rawCompany
+              );
+
+
+            if (
+              !rowCompany
+            ) {
+
+              throw new Error(
+                `Row ${rowIndex + 2} does not contain a valid company value.`
+              );
+            }
+
+          }
+
+
+          const standardized:
+            StandardizedRow =
             {
+
+              /*
+               * THIS IS THE ACTUAL COMPANY
+               *
+               * Never "ALL COMPANIES"
+               */
               company:
-                selectedCPSE,
+                rowCompany,
 
               material_number:
                 null,
@@ -843,69 +1665,102 @@ export const UploadWorkflowView: React.FC = () => {
 
               category:
                 null,
+
             };
+
 
           Object.entries(
             row
           ).forEach(
-            ([
-              sourceColumn,
-              value,
-            ]) => {
+            (
+              [
+                sourceColumn,
+                value,
+              ]
+            ) => {
+
+              /*
+               * Company is routing metadata.
+               * It must NOT become a material field.
+               */
+              if (
+                companyColumn &&
+                sourceColumn ===
+                  companyColumn
+              ) {
+
+                return;
+              }
+
+
               const target =
                 mappingLookup[
                   sourceColumn
                 ];
 
+
               if (!target) {
                 return;
               }
 
+
               const cleaned =
                 value.trim();
+
 
               if (
                 target ===
                 'material_number'
               ) {
+
                 standardized.material_number =
                   cleaned ||
                   null;
               }
 
+
               if (
                 target ===
                 'description'
               ) {
+
                 standardized.description =
                   cleaned ||
                   null;
               }
 
+
               if (
                 target ===
                 'specifications'
               ) {
+
                 standardized.specifications =
                   cleaned ||
                   null;
               }
 
+
               if (
                 target ===
                 'category'
               ) {
+
                 standardized.category =
                   cleaned ||
                   null;
               }
+
             }
           );
 
+
           return standardized;
+
         }
       );
     };
+
 
   /* =========================================================
      AI NORMALIZATION
@@ -917,228 +1772,487 @@ export const UploadWorkflowView: React.FC = () => {
     ): Promise<
       StandardizedRow[]
     > => {
+
       if (
-        rows.length === 0
+        rows.length ===
+        0
       ) {
+
         return [];
       }
 
-      setIsNormalizing(true);
+
+      setIsNormalizing(
+        true
+      );
+
       setNormalizationProgress(
         0
       );
 
-      const normalizedRows: StandardizedRow[] =
-        new Array(
-          rows.length
+
+      const normalizedRows:
+        StandardizedRow[] =
+          new Array(
+            rows.length
+          );
+
+
+      /*
+       * =====================================================
+       * GROUP ROWS BY REAL COMPANY
+       * =====================================================
+       *
+       * Example:
+       *
+       * IOCL → rows 0, 1, 6, 8...
+       * HPCL → rows 2, 3, 4...
+       * BHEL → rows 5, 19...
+       * BPCL → rows 11, 18...
+       */
+      const rowsByCompany =
+        new Map<
+          string,
+          {
+            row: StandardizedRow;
+            originalIndex: number;
+          }[]
+        >();
+
+
+      rows.forEach(
+        (
+          row,
+          originalIndex
+        ) => {
+
+          const company =
+            normalizeCompanyName(
+              row.company
+            );
+
+
+          if (
+            !company
+          ) {
+
+            throw new Error(
+              `Row ${originalIndex + 2} has no valid company name.`
+            );
+          }
+
+
+          /*
+           * VERY IMPORTANT:
+           *
+           * A row can never enter a company group
+           * under "ALL COMPANIES".
+           */
+          if (
+            company ===
+            'ALL COMPANIES'
+          ) {
+
+            throw new Error(
+              `Row ${originalIndex + 2} incorrectly has ALL COMPANIES as its company.`
+            );
+          }
+
+
+          const existing =
+            rowsByCompany.get(
+              company
+            ) || [];
+
+
+          existing.push({
+            row: {
+              ...row,
+              company,
+            },
+
+            originalIndex,
+          });
+
+
+          rowsByCompany.set(
+            company,
+            existing
+          );
+
+        }
+      );
+
+
+      /*
+       * Total batches across all companies.
+       */
+      const totalBatches =
+        Array.from(
+          rowsByCompany.values()
+        ).reduce(
+          (
+            total,
+            companyRows
+          ) =>
+            total +
+            Math.ceil(
+              companyRows.length /
+                NORMALIZATION_BATCH_SIZE
+            ),
+          0
         );
 
-      const totalBatches =
-        Math.ceil(
-          rows.length /
-            NORMALIZATION_BATCH_SIZE
-        );
+
+      let completedBatches =
+        0;
+
 
       try {
-        for (
-          let batchStart = 0,
-          batchNumber = 1;
-          batchStart <
-          rows.length;
-          batchStart +=
-            NORMALIZATION_BATCH_SIZE,
-          batchNumber++
-        ) {
-          const batch =
-            rows.slice(
-              batchStart,
-              batchStart +
-                NORMALIZATION_BATCH_SIZE
-            );
-
-          const payloadRows: NormalizationInputRow[] =
-            batch.map(
-              (
-                row,
-                localIndex
-              ) => ({
-                sourceIndex:
-                  batchStart +
-                  localIndex,
-
-                material_number:
-                  row.material_number,
-
-                description:
-                  row.description,
-
-                specifications:
-                  row.specifications,
-
-                category:
-                  row.category,
-              })
-            );
-
-          const response =
-            await fetch(
-              '/api/normalize-materials',
-              {
-                method: 'POST',
-
-                headers: {
-                  'Content-Type':
-                    'application/json',
-                },
-
-                body: JSON.stringify({
-                  company:
-                    selectedCPSE,
-
-                  rows:
-                    payloadRows,
-                }),
-              }
-            );
-
-          if (!response.ok) {
-            let message =
-              `AI normalization failed (${response.status})`;
-
-            try {
-              const errorBody =
-                await response.json();
-
-              if (
-                errorBody?.error
-              ) {
-                message =
-                  errorBody.error;
-              }
-            } catch {
-              /* Ignore JSON parsing failure */
-            }
-
-            throw new Error(
-              message
-            );
-          }
-
-          const result =
-            await response.json();
-
-          if (
-            !Array.isArray(
-              result.rows
-            )
-          ) {
-            throw new Error(
-              'AI normalization returned an invalid rows array.'
-            );
-          }
-
-          if (
-            result.rows.length !==
-            batch.length
-          ) {
-            throw new Error(
-              `AI normalized ${result.rows.length} rows instead of ${batch.length}.`
-            );
-          }
-
-          result.rows.forEach(
-            (
-              normalized:
-                StandardizedRow &
-                  {
-                    sourceIndex?: number;
-                  },
-              localIndex: number
-            ) => {
-              const sourceIndex =
-                Number.isFinite(
-                  Number(
-                    normalized.sourceIndex
-                  )
-                )
-                  ? Number(
-                      normalized.sourceIndex
-                    )
-                  : batchStart +
-                    localIndex;
-
-              /*
-               * Never allow the AI to change
-               * the selected company.
-               */
-              normalizedRows[
-                sourceIndex
-              ] = {
-                company:
-                  selectedCPSE,
-
-                material_number:
-                  nullableClean(
-                    normalized.material_number
-                  ),
-
-                description:
-                  nullableClean(
-                    normalized.description
-                  ),
-
-                specifications:
-                  nullableClean(
-                    normalized.specifications
-                  ),
-
-                category:
-                  nullableClean(
-                    normalized.category
-                  ),
-              };
-            }
-          );
-
-          const progress =
-            Math.round(
-              (batchNumber /
-                totalBatches) *
-                100
-            );
-
-          setNormalizationProgress(
-            progress
-          );
-        }
 
         /*
-         * Safety check:
-         * no row may be silently lost.
+         * PROCESS EACH COMPANY SEPARATELY
+         */
+        for (
+          const [
+            company,
+            companyRows,
+          ] of rowsByCompany
+        ) {
+
+          console.log(
+            `Normalizing ${company}: ${companyRows.length} rows`
+          );
+
+
+          for (
+            let batchStart = 0;
+            batchStart <
+            companyRows.length;
+            batchStart +=
+              NORMALIZATION_BATCH_SIZE
+          ) {
+
+            const batch =
+              companyRows.slice(
+                batchStart,
+                batchStart +
+                  NORMALIZATION_BATCH_SIZE
+              );
+
+
+            const payloadRows:
+              NormalizationInputRow[] =
+                batch.map(
+                  item => ({
+
+                    /*
+                     * Original global
+                     * row position.
+                     */
+                    sourceIndex:
+                      item.originalIndex,
+
+                    material_number:
+                      item.row
+                        .material_number,
+
+                    description:
+                      item.row
+                        .description,
+
+                    specifications:
+                      item.row
+                        .specifications,
+
+                    category:
+                      item.row
+                        .category,
+
+                  })
+                );
+
+
+            const response =
+              await fetch(
+                '/api/normalize-materials',
+                {
+                  method:
+                    'POST',
+
+                  headers: {
+                    'Content-Type':
+                      'application/json',
+                  },
+
+                  body:
+                    JSON.stringify({
+
+                      /*
+                       * SEND THE ACTUAL COMPANY
+                       * TO THE AI API.
+                       */
+                      company,
+
+                      rows:
+                        payloadRows,
+
+                    }),
+
+                }
+              );
+
+
+            if (
+              !response.ok
+            ) {
+
+              let message =
+                `AI normalization failed for ${company} (${response.status})`;
+
+
+              try {
+
+                const errorBody =
+                  await response.json();
+
+
+                if (
+                  errorBody?.error
+                ) {
+
+                  message =
+                    errorBody.error;
+                }
+
+              } catch {
+                /* Ignore JSON parsing failure */
+              }
+
+
+              throw new Error(
+                message
+              );
+            }
+
+
+            const result =
+              await response.json();
+
+
+            if (
+              !Array.isArray(
+                result.rows
+              )
+            ) {
+
+              throw new Error(
+                `AI normalization returned an invalid rows array for ${company}.`
+              );
+            }
+
+
+            if (
+              result.rows.length !==
+              batch.length
+            ) {
+
+              throw new Error(
+                `AI normalized ${result.rows.length} rows instead of ${batch.length} for ${company}.`
+              );
+            }
+
+
+            result.rows.forEach(
+              (
+                normalized:
+                  StandardizedRow &
+                    {
+                      sourceIndex?: number;
+                    },
+
+                localIndex:
+                  number
+              ) => {
+
+                const fallbackIndex =
+                  batch[
+                    localIndex
+                  ]
+                    ?.originalIndex;
+
+
+                const sourceIndex =
+                  Number.isFinite(
+                    Number(
+                      normalized.sourceIndex
+                    )
+                  )
+                    ? Number(
+                        normalized.sourceIndex
+                      )
+                    : fallbackIndex;
+
+
+                if (
+                  !Number.isFinite(
+                    sourceIndex
+                  )
+                ) {
+
+                  throw new Error(
+                    `Invalid source index returned by AI for ${company}.`
+                  );
+                }
+
+
+                /*
+                 * ABSOLUTE COMPANY SAFETY:
+                 *
+                 * Whatever Gemini returns,
+                 * the company is forced to the
+                 * actual company of this batch.
+                 */
+                normalizedRows[
+                  sourceIndex
+                ] = {
+
+                  company,
+
+                  material_number:
+                    nullableClean(
+                      normalized.material_number
+                    ),
+
+                  description:
+                    nullableClean(
+                      normalized.description
+                    ),
+
+                  specifications:
+                    nullableClean(
+                      normalized.specifications
+                    ),
+
+                  category:
+                    nullableClean(
+                      normalized.category
+                    ),
+
+                };
+
+              }
+            );
+
+
+            completedBatches++;
+
+
+            const progress =
+              totalBatches >
+              0
+                ? Math.round(
+                    (
+                      completedBatches /
+                      totalBatches
+                    ) *
+                      100
+                  )
+                : 100;
+
+
+            setNormalizationProgress(
+              progress
+            );
+
+          }
+
+        }
+
+
+        /*
+         * SAFETY CHECK:
+         * No row may disappear.
          */
         for (
           let i = 0;
-          i < normalizedRows.length;
+          i <
+          normalizedRows.length;
           i++
         ) {
+
           if (
             !normalizedRows[i]
           ) {
+
             throw new Error(
               `AI normalization did not return a result for row ${i + 1}.`
             );
           }
+
+
+          if (
+            normalizedRows[i]
+              .company ===
+            'ALL COMPANIES'
+          ) {
+
+            throw new Error(
+              `Row ${i + 1} still contains ALL COMPANIES. Import blocked for safety.`
+            );
+          }
+
         }
+
 
         setNormalizationProgress(
           100
         );
 
+
+        /*
+         * Log final company distribution.
+         */
+        const finalCounts:
+          Record<
+            string,
+            number
+          > = {};
+
+
+        normalizedRows.forEach(
+          row => {
+
+            finalCounts[
+              row.company
+            ] =
+              (
+                finalCounts[
+                  row.company
+                ] || 0
+              ) + 1;
+
+          }
+        );
+
+
+        console.log(
+          'Final company distribution after AI normalization:',
+          finalCounts
+        );
+
+
         return normalizedRows;
+
       } finally {
-        setIsNormalizing(false);
+
+        setIsNormalizing(
+          false
+        );
+
       }
     };
+
 
   /* =========================================================
      NORMALIZE + VALIDATE
@@ -1146,62 +2260,73 @@ export const UploadWorkflowView: React.FC = () => {
 
   const normalizeAndValidate =
     async () => {
+
       if (
         mappings.length ===
         0
       ) {
+
         addToast({
+
           title:
             'No Mapping Available',
+
           message:
             'Run AI schema mapping before normalization.',
-          type: 'warning',
+
+          type:
+            'warning',
+
         });
 
         return;
       }
 
+
       try {
-        /*
-         * First create a basic structure
-         * from the source-to-target mapping.
-         */
+
         const mappedRows =
           buildMappedRows();
 
-        /*
-         * Then send actual records to Gemini
-         * in batches.
-         */
+
         addToast({
+
           title:
             'AI Normalization Started',
 
-          message: `Processing ${mappedRows.length.toLocaleString()} material records in batches of ${NORMALIZATION_BATCH_SIZE}.`,
+          message:
+            `Processing ${mappedRows.length.toLocaleString()} material records in batches of ${NORMALIZATION_BATCH_SIZE}.`,
 
-          type: 'info',
+          type:
+            'info',
+
         });
+
 
         const normalized =
           await normalizeDataWithAI(
             mappedRows
           );
 
+
         setStandardizedRows(
           normalized
         );
 
-        /*
-         * Validate the AI-normalized result.
-         */
+
         runValidation(
           normalized
         );
-      } catch (error) {
+
+      } catch (
+        error
+      ) {
+
         console.error(
           'AI normalization error:',
           error
         );
+
 
         setValidationErrors(
           []
@@ -1211,7 +2336,9 @@ export const UploadWorkflowView: React.FC = () => {
           []
         );
 
+
         addToast({
+
           title:
             'AI Normalization Failed',
 
@@ -1220,10 +2347,14 @@ export const UploadWorkflowView: React.FC = () => {
               ? error.message
               : 'The material data could not be normalized.',
 
-          type: 'error',
+          type:
+            'error',
+
         });
+
       }
     };
+
 
   /* =========================================================
      VALIDATION
@@ -1232,11 +2363,13 @@ export const UploadWorkflowView: React.FC = () => {
   const runValidation = (
     rows: StandardizedRow[]
   ) => {
-    const errors: string[] =
-      [];
 
-    const warnings: string[] =
-      [];
+    const errors:
+      string[] = [];
+
+    const warnings:
+      string[] = [];
+
 
     const materialNumbers =
       new Map<
@@ -1244,116 +2377,176 @@ export const UploadWorkflowView: React.FC = () => {
         number[]
       >();
 
+
     rows.forEach(
-      (row, index) => {
+      (
+        row,
+        index
+      ) => {
+
         const rowNumber =
           index + 2;
 
+
         /*
-         * Completely unusable record
+         * Company safety.
+         */
+        if (
+          !row.company ||
+          row.company ===
+            'ALL COMPANIES'
+        ) {
+
+          errors.push(
+            `Row ${rowNumber}: Invalid company assignment.`
+          );
+        }
+
+
+        /*
+         * Completely unusable record.
          */
         if (
           !row.material_number &&
           !row.description &&
           !row.specifications
         ) {
+
           errors.push(
             `Row ${rowNumber}: Material number, description and specifications are all empty.`
           );
         }
 
+
         /*
-         * Missing material number
+         * Missing material number.
          */
         if (
           !row.material_number
         ) {
+
           warnings.push(
             `Row ${rowNumber}: Material number is missing.`
           );
         }
 
+
         /*
-         * Missing description
+         * Missing description.
          */
-        if (!row.description) {
+        if (
+          !row.description
+        ) {
+
           warnings.push(
             `Row ${rowNumber}: Description is missing.`
           );
         }
 
+
         /*
-         * Missing specifications
-         *
-         * This is a warning, not an error.
-         * Some company datasets simply don't
-         * provide separate technical specs.
+         * Missing specifications.
          */
         if (
           !row.specifications
         ) {
+
           warnings.push(
             `Row ${rowNumber}: Specifications are missing.`
           );
         }
 
+
         /*
-         * Missing category
+         * Missing category.
          */
-        if (!row.category) {
+        if (
+          !row.category
+        ) {
+
           warnings.push(
             `Row ${rowNumber}: Category is missing.`
           );
         }
 
+
         /*
-         * Duplicate material number tracking
+         * Duplicate material number.
          */
         if (
           row.material_number
         ) {
+
+          /*
+           * Include company in duplicate key.
+           *
+           * This means:
+           *
+           * BHEL + 123
+           * HPCL + 123
+           *
+           * are NOT treated as a duplicate
+           * across different companies.
+           */
           const key =
-            row.material_number
+            `${row.company}::${row.material_number
               .trim()
-              .toLowerCase();
+              .toLowerCase()}`;
+
 
           const existing =
             materialNumbers.get(
               key
             ) || [];
 
+
           existing.push(
             rowNumber
           );
+
 
           materialNumbers.set(
             key,
             existing
           );
+
         }
+
       }
     );
 
-    /*
-     * Report duplicates as warnings
-     * instead of blocking the entire file.
-     */
+
     materialNumbers.forEach(
       (
         rowNumbers,
-        materialNumber
+        key
       ) => {
+
         if (
-          rowNumbers.length > 1
+          rowNumbers.length >
+          1
         ) {
+
+          const [
+            company,
+            materialNumber,
+          ] =
+            key.split(
+              '::'
+            );
+
+
           warnings.push(
-            `Duplicate material number "${materialNumber}" found in rows ${rowNumbers.join(
+            `Duplicate material number "${materialNumber}" found for ${company} in rows ${rowNumbers.join(
               ', '
             )}.`
           );
+
         }
+
       }
     );
+
 
     setValidationErrors(
       errors
@@ -1363,34 +2556,54 @@ export const UploadWorkflowView: React.FC = () => {
       warnings
     );
 
-    setStep(4);
 
-    if (errors.length === 0) {
+    setStep(
+      4
+    );
+
+
+    if (
+      errors.length ===
+      0
+    ) {
+
       addToast({
+
         title:
           'AI Validation Complete',
 
         message:
-          warnings.length > 0
+          warnings.length >
+          0
             ? `${warnings.length} warning(s) found.`
             : 'Dataset passed validation without blocking errors.',
 
         type:
-          warnings.length > 0
+          warnings.length >
+          0
             ? 'warning'
             : 'success',
+
       });
+
     } else {
+
       addToast({
+
         title:
           'Validation Issues Found',
 
-        message: `${errors.length} blocking error(s) found.`,
+        message:
+          `${errors.length} blocking error(s) found.`,
 
-        type: 'error',
+        type:
+          'error',
+
       });
+
     }
   };
+
 
   /* =========================================================
      IMPORT INTO SUPABASE
@@ -1398,47 +2611,102 @@ export const UploadWorkflowView: React.FC = () => {
 
   const importToSupabase =
     async () => {
+
       if (
         standardizedRows.length ===
         0
       ) {
+
         addToast({
+
           title:
             'Nothing to Import',
 
           message:
             'There are no standardized records ready for import.',
 
-          type: 'warning',
+          type:
+            'warning',
+
         });
 
         return;
       }
 
+
       if (
         validationErrors.length >
         0
       ) {
+
         addToast({
+
           title:
             'Validation Failed',
 
           message:
             'Fix the validation errors before importing.',
 
-          type: 'error',
+          type:
+            'error',
+
         });
 
         return;
       }
 
-      setIsImporting(true);
+
+      /*
+       * FINAL SAFETY CHECK.
+       *
+       * Absolutely prevent ALL COMPANIES
+       * from entering Supabase.
+       */
+      const invalidRows =
+        standardizedRows.filter(
+          row =>
+            !row.company ||
+            row.company ===
+              'ALL COMPANIES'
+        );
+
+
+      if (
+        invalidRows.length >
+        0
+      ) {
+
+        addToast({
+
+          title:
+            'Invalid Company Assignment',
+
+          message:
+            'Import blocked because one or more rows do not have a real company assigned.',
+
+          type:
+            'error',
+
+        });
+
+        return;
+      }
+
+
+      setIsImporting(
+        true
+      );
+
 
       try {
+
         const chunkSize =
           500;
 
-        let inserted = 0;
+
+        let inserted =
+          0;
+
 
         for (
           let start = 0;
@@ -1447,6 +2715,7 @@ export const UploadWorkflowView: React.FC = () => {
           start +=
             chunkSize
         ) {
+
           const chunk =
             standardizedRows.slice(
               start,
@@ -1454,42 +2723,67 @@ export const UploadWorkflowView: React.FC = () => {
                 chunkSize
             );
 
-          const { error } =
+
+          const {
+            error,
+          } =
             await supabase
-              .from('materials')
+              .from(
+                'materials'
+              )
               .insert(
                 chunk
               );
 
-          if (error) {
+
+          if (
+            error
+          ) {
+
             throw error;
           }
+
 
           inserted +=
             chunk.length;
         }
 
+
         setInsertedCount(
           inserted
         );
 
-        setStep(6);
+
+        setStep(
+          6
+        );
+
 
         addToast({
+
           title:
             'Database Updated',
 
-          message: `${inserted.toLocaleString()} material records added to Supabase.`,
+          message:
+            `${inserted.toLocaleString()} material records added to Supabase.`,
 
-          type: 'success',
+          type:
+            'success',
+
         });
-      } catch (error) {
+
+      } catch (
+        error
+      ) {
+
         console.error(
           'Supabase import error:',
           error
         );
 
+
         addToast({
+
           title:
             'Database Import Failed',
 
@@ -1498,84 +2792,116 @@ export const UploadWorkflowView: React.FC = () => {
               ? error.message
               : 'Could not insert the standardized records.',
 
-          type: 'error',
+          type:
+            'error',
+
         });
+
       } finally {
-        setIsImporting(false);
+
+        setIsImporting(
+          false
+        );
+
       }
     };
+
 
   /* =========================================================
      RESET
   ========================================================= */
 
-  const resetWizard = () => {
-    setStep(1);
+  const resetWizard =
+    () => {
 
-    setSelectedCPSE(
-      'IOCL'
-    );
+      setStep(
+        1
+      );
 
-    setSelectedFile(
-      null
-    );
 
-    setFileName('');
+      setSelectedCPSE(
+        'ALL COMPANIES'
+      );
 
-    setIsDragging(
-      false
-    );
 
-    setSourceHeaders(
-      []
-    );
+      setSelectedFile(
+        null
+      );
 
-    setSourceRows(
-      []
-    );
 
-    setMappings(
-      []
-    );
+      setFileName(
+        ''
+      );
 
-    setStandardizedRows(
-      []
-    );
 
-    setIsAnalyzing(
-      false
-    );
+      setIsDragging(
+        false
+      );
 
-    setIsNormalizing(
-      false
-    );
 
-    setNormalizationProgress(
-      0
-    );
+      setSourceHeaders(
+        []
+      );
 
-    setIsImporting(
-      false
-    );
 
-    setValidationErrors(
-      []
-    );
+      setSourceRows(
+        []
+      );
 
-    setValidationWarnings(
-      []
-    );
 
-    setInsertedCount(
-      0
-    );
-  };
+      setMappings(
+        []
+      );
+
+
+      setStandardizedRows(
+        []
+      );
+
+
+      setIsAnalyzing(
+        false
+      );
+
+
+      setIsNormalizing(
+        false
+      );
+
+
+      setNormalizationProgress(
+        0
+      );
+
+
+      setIsImporting(
+        false
+      );
+
+
+      setValidationErrors(
+        []
+      );
+
+
+      setValidationWarnings(
+        []
+      );
+
+
+      setInsertedCount(
+        0
+      );
+
+    };
+
 
   /* =========================================================
      RENDER
   ========================================================= */
 
   return (
+
     <div className="p-4 lg:p-6 space-y-6 max-w-[1400px] mx-auto">
 
       {/* =====================================================
@@ -1600,9 +2926,11 @@ export const UploadWorkflowView: React.FC = () => {
 
             </div>
 
+
             <h1 className="text-xl font-bold text-white tracking-tight mt-1">
               AI-Powered Material Data Ingestion
             </h1>
+
 
             <p className="text-xs text-slate-300 mt-1 max-w-3xl">
               Upload messy CPSE material spreadsheets,
@@ -1612,6 +2940,7 @@ export const UploadWorkflowView: React.FC = () => {
             </p>
 
           </div>
+
 
           <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono">
 
@@ -1624,6 +2953,7 @@ export const UploadWorkflowView: React.FC = () => {
         </div>
 
       </div>
+
 
       {/* =====================================================
           STEPPER
@@ -1649,7 +2979,9 @@ export const UploadWorkflowView: React.FC = () => {
               const number =
                 index + 1;
 
+
               return (
+
                 <div
                   key={label}
                   className={`flex items-center gap-2 whitespace-nowrap ${
@@ -1670,15 +3002,19 @@ export const UploadWorkflowView: React.FC = () => {
                         : 'bg-slate-100 text-slate-500'
                     }`}
                   >
+
                     {step >
                     number
                       ? '✓'
                       : number}
+
                   </div>
+
 
                   {label}
 
                 </div>
+
               );
             }
           )}
@@ -1687,11 +3023,13 @@ export const UploadWorkflowView: React.FC = () => {
 
       </div>
 
+
       {/* =====================================================
           STEP 1
       ===================================================== */}
 
       {step === 1 && (
+
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
 
           <div>
@@ -1700,60 +3038,193 @@ export const UploadWorkflowView: React.FC = () => {
               Select Source Company
             </h2>
 
+
             <p className="text-xs text-slate-500 mt-1">
-              Choose the company whose material file is being uploaded.
+
+              Choose a specific company, or choose{' '}
+
+              <span className="font-bold text-emerald-700">
+                ALL COMPANIES
+              </span>{' '}
+
+              when the uploaded file contains material records
+              from multiple companies.
+
             </p>
 
           </div>
 
+
+          {/* =================================================
+              ALL COMPANIES
+          ================================================= */}
+
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedCPSE(
+                'ALL COMPANIES'
+              )
+            }
+            className={`w-full p-4 rounded-xl border text-left transition-all ${
+              selectedCPSE ===
+              'ALL COMPANIES'
+                ? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-500'
+                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+            }`}
+          >
+
+            <div className="flex items-center justify-between">
+
+              <div className="flex items-center gap-3">
+
+                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+
+                  <Layers className="w-5 h-5 text-blue-700" />
+
+                </div>
+
+
+                <div>
+
+                  <span className="font-black text-sm text-slate-900">
+                    ALL COMPANIES
+                  </span>
+
+
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Universal multi-company material database
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              <div className="text-right">
+
+                <p className="text-[11px] text-slate-400 font-mono">
+
+                  {
+                    companyRecords
+                      .reduce(
+                        (
+                          total,
+                          company
+                        ) =>
+                          total +
+                          (
+                            company.recordsUploaded ||
+                            0
+                          ),
+                        0
+                      )
+                      .toLocaleString()
+                  }{' '}
+
+                  records currently loaded
+
+                </p>
+
+              </div>
+
+            </div>
+
+          </button>
+
+
+          {/* =================================================
+              COMPANY CARDS
+          ================================================= */}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
 
-            {companyRecords.map(
-              (company) => (
-                <button
-                  key={
-                    company.id
-                  }
-                  type="button"
-                  onClick={() =>
-                    setSelectedCPSE(
-                      company.code
-                    )
-                  }
-                  className={`p-4 rounded-xl border text-left transition-all ${
-                    selectedCPSE ===
-                    company.code
-                      ? 'border-emerald-600 bg-emerald-50'
-                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-
-                  <div className="flex items-center justify-between">
-
-                    <span className="font-bold text-sm text-slate-900">
-                      {company.code}
-                    </span>
-
-                    <Building className="w-4 h-4 text-slate-400" />
-
-                  </div>
-
-                  <p className="text-xs text-slate-600 mt-1">
-                    {company.name}
-                  </p>
-
-                  <p className="text-[11px] text-slate-400 font-mono mt-3">
-                    {
-                      company.recordsUploaded.toLocaleString()
-                    }{' '}
-                    records currently loaded
-                  </p>
-
-                </button>
+            {uploadCompanyOptions
+              .filter(
+                company =>
+                  company !==
+                  'ALL COMPANIES'
               )
-            )}
+              .map(
+                (
+                  companyCode
+                ) => {
+
+                  const company =
+                    companyRecords.find(
+                      item =>
+                        item.code
+                          ?.trim()
+                          .toUpperCase() ===
+                        companyCode
+                    );
+
+
+                  return (
+
+                    <button
+                      key={
+                        companyCode
+                      }
+                      type="button"
+                      onClick={() =>
+                        setSelectedCPSE(
+                          companyCode
+                        )
+                      }
+                      className={`p-4 rounded-xl border text-left transition-all ${
+                        selectedCPSE ===
+                        companyCode
+                          ? 'border-emerald-600 bg-emerald-50'
+                          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+
+                      <div className="flex items-center justify-between">
+
+                        <span className="font-bold text-sm text-slate-900">
+                          {
+                            companyCode
+                          }
+                        </span>
+
+
+                        <Building className="w-4 h-4 text-slate-400" />
+
+                      </div>
+
+
+                      <p className="text-xs text-slate-600 mt-1">
+
+                        {company?.name ||
+                          'Company material database'}
+
+                      </p>
+
+
+                      <p className="text-[11px] text-slate-400 font-mono mt-3">
+
+                        {(
+                          company?.recordsUploaded ||
+                          0
+                        ).toLocaleString()}{' '}
+
+                        records currently loaded
+
+                      </p>
+
+                    </button>
+
+                  );
+                }
+              )}
 
           </div>
+
+
+          {/* =================================================
+              DATA SAFETY
+          ================================================= */}
 
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
 
@@ -1761,15 +3232,21 @@ export const UploadWorkflowView: React.FC = () => {
 
               <ShieldCheck className="w-5 h-5 text-amber-600 mt-0.5" />
 
+
               <div>
 
                 <p className="text-sm font-bold text-amber-900">
                   Data safety
                 </p>
 
+
                 <p className="text-xs text-amber-800 mt-1">
-                  Data is analyzed and normalized before
-                  it can be imported into Supabase.
+
+                  In ALL COMPANIES mode, the Company column
+                  determines the destination company for each
+                  row. ALL COMPANIES is never stored as a
+                  material company.
+
                 </p>
 
               </div>
@@ -1778,74 +3255,109 @@ export const UploadWorkflowView: React.FC = () => {
 
           </div>
 
+
+          {/* =================================================
+              CONTINUE
+          ================================================= */}
+
           <div className="flex justify-end pt-4 border-t border-slate-100">
 
             <button
               type="button"
               onClick={() =>
-                setStep(2)
+                setStep(
+                  2
+                )
               }
               className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2"
             >
+
               Continue
+
               <ChevronRight className="w-4 h-4" />
+
             </button>
 
           </div>
 
         </div>
+
       )}
+
 
       {/* =====================================================
           STEP 2
       ===================================================== */}
 
       {step === 2 && (
+
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
 
           <div>
 
             <h2 className="text-base font-bold text-slate-900">
-              Upload {selectedCPSE} Material Dataset
+
+              Upload{' '}
+
+              {selectedCPSE ===
+              'ALL COMPANIES'
+                ? 'Multi-Company'
+                : selectedCPSE}{' '}
+
+              Material Dataset
+
             </h2>
 
+
             <p className="text-xs text-slate-500 mt-1">
-              Upload a messy CSV or Excel material master.
+
+              {selectedCPSE ===
+              'ALL COMPANIES'
+                ? 'The Company column will determine the actual CPSE for every row.'
+                : 'Upload a messy CSV or Excel material master.'}
+
             </p>
 
           </div>
 
+
           <label
-            onDragOver={(event) => {
+            onDragOver={event => {
+
               event.preventDefault();
 
               setIsDragging(
                 true
               );
+
             }}
             onDragLeave={() =>
               setIsDragging(
                 false
               )
             }
-            onDrop={(
-              event
-            ) => {
+            onDrop={event => {
+
               event.preventDefault();
 
               setIsDragging(
                 false
               );
 
+
               const file =
                 event.dataTransfer
                   .files?.[0];
 
+
               if (file) {
+
                 void handleFile(
                   file
                 );
+
               }
+
             }}
             className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all block ${
               isDragging
@@ -1858,57 +3370,73 @@ export const UploadWorkflowView: React.FC = () => {
               type="file"
               accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               className="hidden"
-              onChange={(
-                event
-              ) => {
+              onChange={event => {
+
                 const file =
                   event.target
                     .files?.[0];
 
+
                 if (file) {
+
                   void handleFile(
                     file
                   );
+
                 }
+
 
                 event.currentTarget.value =
                   '';
+
               }}
             />
 
+
             <UploadCloud className="w-12 h-12 mx-auto text-slate-400 mb-4" />
+
 
             <p className="text-sm font-bold text-slate-900">
               Drop Excel or CSV file here
             </p>
 
+
             <p className="text-xs text-slate-500 mt-1">
               or click to browse
             </p>
+
 
             <p className="text-[11px] text-slate-400 mt-2">
               Supported: .xlsx, .xls, .csv
             </p>
 
+
             {fileName && (
+
               <div className="mt-5 inline-flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono">
 
                 <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+
 
                 <span className="max-w-[400px] truncate">
                   {fileName}
                 </span>
 
+
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
 
               </div>
+
             )}
 
           </label>
 
+
           {sourceRows.length >
             0 && (
+
             <>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
                 <StatCard
@@ -1918,12 +3446,14 @@ export const UploadWorkflowView: React.FC = () => {
                   }
                 />
 
+
                 <StatCard
                   title="Columns Detected"
                   value={
                     sourceHeaders.length
                   }
                 />
+
 
                 <StatCard
                   title="Selected Company"
@@ -1935,6 +3465,43 @@ export const UploadWorkflowView: React.FC = () => {
 
               </div>
 
+
+              {selectedCPSE ===
+                'ALL COMPANIES' && (
+
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+
+                  <div className="flex items-start gap-3">
+
+                    <Building className="w-5 h-5 text-blue-600 mt-0.5" />
+
+
+                    <div>
+
+                      <p className="text-sm font-bold text-blue-900">
+
+                        Multi-company mode detected
+
+                      </p>
+
+
+                      <p className="text-xs text-blue-800 mt-1">
+
+                        The uploaded file must contain a Company
+                        column. Each row will be routed to its
+                        corresponding company automatically.
+
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              )}
+
+
               <div className="rounded-xl border border-slate-200 overflow-hidden">
 
                 <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
@@ -1943,11 +3510,13 @@ export const UploadWorkflowView: React.FC = () => {
                     Raw Data Preview
                   </p>
 
+
                   <p className="text-[11px] text-slate-500 mt-1">
                     First 10 records detected from the uploaded file.
                   </p>
 
                 </div>
+
 
                 <div className="overflow-auto max-h-[420px]">
 
@@ -1963,9 +3532,8 @@ export const UploadWorkflowView: React.FC = () => {
                             10
                           )
                           .map(
-                            (
-                              header
-                            ) => (
+                            header => (
+
                               <th
                                 key={
                                   header
@@ -1976,12 +3544,14 @@ export const UploadWorkflowView: React.FC = () => {
                                   header
                                 }
                               </th>
+
                             )
                           )}
 
                       </tr>
 
                     </thead>
+
 
                     <tbody className="divide-y divide-slate-100">
 
@@ -1995,6 +3565,7 @@ export const UploadWorkflowView: React.FC = () => {
                             row,
                             rowIndex
                           ) => (
+
                             <tr
                               key={
                                 rowIndex
@@ -2007,26 +3578,31 @@ export const UploadWorkflowView: React.FC = () => {
                                   10
                                 )
                                 .map(
-                                  (
-                                    header
-                                  ) => (
+                                  header => (
+
                                     <td
                                       key={
                                         header
                                       }
                                       className="p-3 text-slate-600 align-top min-w-[160px] max-w-[350px]"
                                     >
+
                                       <div className="whitespace-pre-wrap break-words line-clamp-4">
+
                                         {row[
                                           header
                                         ] ||
                                           '—'}
+
                                       </div>
+
                                     </td>
+
                                   )
                                 )}
 
                             </tr>
+
                           )
                         )}
 
@@ -2037,21 +3613,30 @@ export const UploadWorkflowView: React.FC = () => {
                 </div>
 
               </div>
+
             </>
+
           )}
+
 
           <div className="flex items-center justify-between pt-4 border-t border-slate-100">
 
             <button
               type="button"
               onClick={() =>
-                setStep(1)
+                setStep(
+                  1
+                )
               }
               className="text-xs font-semibold text-slate-600 flex items-center gap-1"
             >
+
               <ChevronLeft className="w-4 h-4" />
+
               Back
+
             </button>
+
 
             <button
               type="button"
@@ -2068,15 +3653,25 @@ export const UploadWorkflowView: React.FC = () => {
             >
 
               {isAnalyzing ? (
+
                 <>
+
                   <RefreshCw className="w-4 h-4 animate-spin" />
+
                   AI Analyzing...
+
                 </>
+
               ) : (
+
                 <>
+
                   <Sparkles className="w-4 h-4" />
+
                   Analyze with AI
+
                 </>
+
               )}
 
             </button>
@@ -2084,13 +3679,16 @@ export const UploadWorkflowView: React.FC = () => {
           </div>
 
         </div>
+
       )}
+
 
       {/* =====================================================
           STEP 3
       ===================================================== */}
 
       {step === 3 && (
+
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
 
           <div className="flex items-center justify-between gap-4">
@@ -2101,34 +3699,51 @@ export const UploadWorkflowView: React.FC = () => {
                 AI Schema Mapping
               </h2>
 
+
               <p className="text-xs text-slate-500 mt-1">
+
                 The AI has identified how the uploaded
                 company's fields map to the standard structure.
+
               </p>
 
             </div>
 
+
             <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+
               <Cpu className="w-5 h-5 text-indigo-600" />
+
             </div>
 
           </div>
 
+
           <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
 
             <p className="text-xs text-indigo-900">
-              Source company:
+
+              Source scope:
+
               <span className="font-bold ml-1">
+
                 {selectedCPSE}
+
               </span>
+
             </p>
 
+
             <p className="text-[11px] text-indigo-700 mt-1">
+
               {sourceRows.length.toLocaleString()}{' '}
+
               material records will be normalized after mapping.
+
             </p>
 
           </div>
+
 
           <div className="overflow-auto border border-slate-200 rounded-xl">
 
@@ -2158,10 +3773,12 @@ export const UploadWorkflowView: React.FC = () => {
 
               </thead>
 
+
               <tbody className="divide-y divide-slate-100">
 
                 {mappings.map(
-                  (mapping) => (
+                  mapping => (
+
                     <tr
                       key={
                         mapping.sourceColumn
@@ -2169,10 +3786,13 @@ export const UploadWorkflowView: React.FC = () => {
                     >
 
                       <td className="p-3 font-mono font-bold text-slate-800">
+
                         {
                           mapping.sourceColumn
                         }
+
                       </td>
+
 
                       <td className="p-3">
 
@@ -2184,27 +3804,35 @@ export const UploadWorkflowView: React.FC = () => {
                               : 'bg-emerald-50 text-emerald-700'
                           }`}
                         >
+
                           {
                             mapping.targetColumn
                           }
+
                         </span>
 
                       </td>
 
+
                       <td className="p-3 font-mono font-bold">
+
                         {
                           mapping.confidence
-                        }
-                        %
+                        }%
+
                       </td>
 
+
                       <td className="p-3 text-slate-500 max-w-[450px]">
+
                         {
                           mapping.reason
                         }
+
                       </td>
 
                     </tr>
+
                   )
                 )}
 
@@ -2214,16 +3842,19 @@ export const UploadWorkflowView: React.FC = () => {
 
           </div>
 
+
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
 
             <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500">
               Standard fields
             </p>
 
+
             <div className="flex flex-wrap gap-2 mt-2">
 
               {STANDARD_FIELDS.map(
-                (field) => (
+                field => (
+
                   <span
                     key={
                       field
@@ -2232,6 +3863,7 @@ export const UploadWorkflowView: React.FC = () => {
                   >
                     {field}
                   </span>
+
                 )
               )}
 
@@ -2239,7 +3871,9 @@ export const UploadWorkflowView: React.FC = () => {
 
           </div>
 
+
           {isNormalizing && (
+
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
 
               <div className="flex items-center justify-between">
@@ -2254,11 +3888,15 @@ export const UploadWorkflowView: React.FC = () => {
 
                 </div>
 
+
                 <span className="text-xs font-mono font-bold text-emerald-700">
+
                   {normalizationProgress}%
+
                 </span>
 
               </div>
+
 
               <div className="mt-3 h-2 bg-emerald-100 rounded-full overflow-hidden">
 
@@ -2271,28 +3909,41 @@ export const UploadWorkflowView: React.FC = () => {
 
               </div>
 
+
               <p className="text-[11px] text-emerald-800 mt-2">
-                The dataset is being processed in batches
-                to extract useful material attributes without
-                inventing unsupported technical information.
+
+                Material records are being processed by their
+                actual source company. The system does not
+                replace company identities with ALL COMPANIES.
+
               </p>
 
             </div>
+
           )}
+
 
           <div className="flex items-center justify-between pt-4 border-t border-slate-100">
 
             <button
               type="button"
-              disabled={isNormalizing}
+              disabled={
+                isNormalizing
+              }
               onClick={() =>
-                setStep(2)
+                setStep(
+                  2
+                )
               }
               className="text-xs font-semibold text-slate-600 disabled:opacity-50 flex items-center gap-1"
             >
+
               <ChevronLeft className="w-4 h-4" />
+
               Back
+
             </button>
+
 
             <button
               type="button"
@@ -2308,15 +3959,25 @@ export const UploadWorkflowView: React.FC = () => {
             >
 
               {isNormalizing ? (
+
                 <>
+
                   <RefreshCw className="w-4 h-4 animate-spin" />
+
                   Normalizing {normalizationProgress}%
+
                 </>
+
               ) : (
+
                 <>
+
                   <Sparkles className="w-4 h-4" />
+
                   Normalize & Validate
+
                 </>
+
               )}
 
             </button>
@@ -2324,13 +3985,16 @@ export const UploadWorkflowView: React.FC = () => {
           </div>
 
         </div>
+
       )}
+
 
       {/* =====================================================
           STEP 4
       ===================================================== */}
 
       {step === 4 && (
+
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
 
           <div>
@@ -2339,12 +4003,16 @@ export const UploadWorkflowView: React.FC = () => {
               AI Data Validation
             </h2>
 
+
             <p className="text-xs text-slate-500 mt-1">
+
               The AI-normalized records are checked before
               they can enter the database.
+
             </p>
 
           </div>
+
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
@@ -2354,6 +4022,7 @@ export const UploadWorkflowView: React.FC = () => {
                 standardizedRows.length
               }
             />
+
 
             <StatCard
               title="Errors"
@@ -2365,6 +4034,7 @@ export const UploadWorkflowView: React.FC = () => {
                 0
               }
             />
+
 
             <StatCard
               title="Warnings"
@@ -2379,13 +4049,16 @@ export const UploadWorkflowView: React.FC = () => {
 
           </div>
 
+
           {validationErrors.length ===
             0 && (
+
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
 
               <div className="flex items-center gap-2">
 
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+
 
                 <div>
 
@@ -2393,9 +4066,12 @@ export const UploadWorkflowView: React.FC = () => {
                     No blocking validation errors
                   </p>
 
+
                   <p className="text-xs text-emerald-800 mt-1">
+
                     The AI-normalized dataset can proceed
                     to the review preview.
+
                   </p>
 
                 </div>
@@ -2403,10 +4079,13 @@ export const UploadWorkflowView: React.FC = () => {
               </div>
 
             </div>
+
           )}
+
 
           {validationErrors.length >
             0 && (
+
             <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
 
               <div className="flex items-center gap-2 font-bold text-rose-800 text-sm">
@@ -2417,6 +4096,7 @@ export const UploadWorkflowView: React.FC = () => {
 
               </div>
 
+
               <div className="mt-2 space-y-1 max-h-52 overflow-y-auto">
 
                 {validationErrors
@@ -2425,7 +4105,8 @@ export const UploadWorkflowView: React.FC = () => {
                     50
                   )
                   .map(
-                    (error) => (
+                    error => (
+
                       <p
                         key={
                           error
@@ -2434,16 +4115,20 @@ export const UploadWorkflowView: React.FC = () => {
                       >
                         {error}
                       </p>
+
                     )
                   )}
 
               </div>
 
             </div>
+
           )}
+
 
           {validationWarnings.length >
             0 && (
+
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
 
               <div className="flex items-center gap-2 font-bold text-amber-800 text-sm">
@@ -2454,6 +4139,7 @@ export const UploadWorkflowView: React.FC = () => {
 
               </div>
 
+
               <div className="mt-2 space-y-1 max-h-52 overflow-y-auto">
 
                 {validationWarnings
@@ -2462,7 +4148,8 @@ export const UploadWorkflowView: React.FC = () => {
                     50
                   )
                   .map(
-                    (warning) => (
+                    warning => (
+
                       <p
                         key={
                           warning
@@ -2471,26 +4158,35 @@ export const UploadWorkflowView: React.FC = () => {
                       >
                         {warning}
                       </p>
+
                     )
                   )}
 
               </div>
 
             </div>
+
           )}
+
 
           <div className="flex items-center justify-between pt-4 border-t border-slate-100">
 
             <button
               type="button"
               onClick={() =>
-                setStep(3)
+                setStep(
+                  3
+                )
               }
               className="text-xs font-semibold text-slate-600 flex items-center gap-1"
             >
+
               <ChevronLeft className="w-4 h-4" />
+
               Back
+
             </button>
+
 
             <button
               type="button"
@@ -2499,7 +4195,9 @@ export const UploadWorkflowView: React.FC = () => {
                 0
               }
               onClick={() =>
-                setStep(5)
+                setStep(
+                  5
+                )
               }
               className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2"
             >
@@ -2513,13 +4211,16 @@ export const UploadWorkflowView: React.FC = () => {
           </div>
 
         </div>
+
       )}
+
 
       {/* =====================================================
           STEP 5
       ===================================================== */}
 
       {step === 5 && (
+
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
 
           <div>
@@ -2528,12 +4229,16 @@ export const UploadWorkflowView: React.FC = () => {
               AI-Standardized Data Preview
             </h2>
 
+
             <p className="text-xs text-slate-500 mt-1">
+
               Review the AI-normalized records before they
               are inserted into Supabase.
+
             </p>
 
           </div>
+
 
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
 
@@ -2541,33 +4246,60 @@ export const UploadWorkflowView: React.FC = () => {
 
               <Sparkles className="w-5 h-5 text-blue-600 mt-0.5" />
 
+
               <div>
 
                 <p className="text-sm font-bold text-blue-900">
                   AI normalization complete
                 </p>
 
+
                 <p className="text-xs text-blue-800 mt-1">
-                  Company:
+
+                  Company scope:
+
                   <span className="font-bold ml-1">
+
                     {selectedCPSE}
+
                   </span>
+
                 </p>
 
+
                 <p className="text-xs text-blue-800">
+
                   Records:
+
                   <span className="font-bold ml-1">
+
                     {
                       standardizedRows.length
                     }
+
                   </span>
+
                 </p>
+
+
+                {selectedCPSE ===
+                  'ALL COMPANIES' && (
+
+                  <p className="text-[11px] text-blue-700 mt-2">
+
+                    Each row below contains its actual
+                    destination company.
+
+                  </p>
+
+                )}
 
               </div>
 
             </div>
 
           </div>
+
 
           <div className="overflow-auto border border-slate-200 rounded-xl max-h-[550px]">
 
@@ -2601,6 +4333,7 @@ export const UploadWorkflowView: React.FC = () => {
 
               </thead>
 
+
               <tbody className="divide-y divide-slate-100">
 
                 {standardizedRows
@@ -2613,6 +4346,7 @@ export const UploadWorkflowView: React.FC = () => {
                       row,
                       index
                     ) => (
+
                       <tr
                         key={
                           index
@@ -2620,44 +4354,61 @@ export const UploadWorkflowView: React.FC = () => {
                       >
 
                         <td className="p-3 font-bold text-slate-800">
-                          {
-                            row.company
-                          }
+
+                          {row.company}
+
                         </td>
 
+
                         <td className="p-3 font-mono text-slate-700">
+
                           {
                             row.material_number ||
                             'N/A'
                           }
+
                         </td>
 
+
                         <td className="p-3 text-slate-600 min-w-[220px] max-w-[350px]">
+
                           <div className="whitespace-pre-wrap break-words">
+
                             {
                               row.description ||
                               'N/A'
                             }
+
                           </div>
+
                         </td>
 
+
                         <td className="p-3 text-slate-600 min-w-[300px] max-w-[500px]">
+
                           <div className="whitespace-pre-wrap break-words">
+
                             {
                               row.specifications ||
                               'N/A'
                             }
+
                           </div>
+
                         </td>
 
+
                         <td className="p-3 text-slate-600">
+
                           {
                             row.category ||
                             'N/A'
                           }
+
                         </td>
 
                       </tr>
+
                     )
                   )}
 
@@ -2667,33 +4418,47 @@ export const UploadWorkflowView: React.FC = () => {
 
           </div>
 
+
           <p className="text-[11px] text-slate-400">
+
             Showing the first{' '}
+
             {
               Math.min(
                 50,
                 standardizedRows.length
               )
             }{' '}
+
             records of{' '}
+
             {
               standardizedRows.length
             }{' '}
+
             total records.
+
           </p>
+
 
           <div className="flex items-center justify-between pt-4 border-t border-slate-100">
 
             <button
               type="button"
               onClick={() =>
-                setStep(4)
+                setStep(
+                  4
+                )
               }
               className="text-xs font-semibold text-slate-600 flex items-center gap-1"
             >
+
               <ChevronLeft className="w-4 h-4" />
+
               Back
+
             </button>
+
 
             <button
               type="button"
@@ -2709,15 +4474,25 @@ export const UploadWorkflowView: React.FC = () => {
             >
 
               {isImporting ? (
+
                 <>
+
                   <RefreshCw className="w-4 h-4 animate-spin" />
+
                   Importing...
+
                 </>
+
               ) : (
+
                 <>
+
                   <Database className="w-4 h-4" />
+
                   Import Into Supabase
+
                 </>
+
               )}
 
             </button>
@@ -2725,13 +4500,16 @@ export const UploadWorkflowView: React.FC = () => {
           </div>
 
         </div>
+
       )}
+
 
       {/* =====================================================
           STEP 6
       ===================================================== */}
 
       {step === 6 && (
+
         <motion.div
           initial={{
             opacity: 0,
@@ -2752,18 +4530,27 @@ export const UploadWorkflowView: React.FC = () => {
 
             </div>
 
+
             <h2 className="text-xl font-bold text-slate-900 mt-4">
               Database Update Successful
             </h2>
 
+
             <p className="text-sm text-slate-500 mt-2">
+
               The AI-standardized{' '}
-              {selectedCPSE}{' '}
-              material data has been inserted into
-              Supabase.
+
+              {selectedCPSE ===
+              'ALL COMPANIES'
+                ? 'multi-company'
+                : selectedCPSE}{' '}
+
+              material data has been inserted into Supabase.
+
             </p>
 
           </div>
+
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
 
@@ -2774,13 +4561,15 @@ export const UploadWorkflowView: React.FC = () => {
               }
             />
 
+
             <StatCard
-              title="Company"
+              title="Company Scope"
               value={
                 selectedCPSE
               }
               text
             />
+
 
             <StatCard
               title="Database"
@@ -2790,11 +4579,13 @@ export const UploadWorkflowView: React.FC = () => {
 
           </div>
 
+
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 max-w-3xl mx-auto">
 
             <div className="flex items-start gap-3">
 
               <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5" />
+
 
               <div>
 
@@ -2802,10 +4593,14 @@ export const UploadWorkflowView: React.FC = () => {
                   Live database ingestion complete
                 </p>
 
+
                 <p className="text-xs text-emerald-800 mt-1">
-                  These records are now part of the Supabase
-                  material dataset and can be used by the
-                  Material Catalog and harmonization system.
+
+                  Records were stored using their actual
+                  company assignments. The ALL COMPANIES
+                  selection is only a processing scope and
+                  is never stored as a company identity.
+
                 </p>
 
               </div>
@@ -2813,6 +4608,7 @@ export const UploadWorkflowView: React.FC = () => {
             </div>
 
           </div>
+
 
           <div className="flex justify-center gap-3 pt-4 border-t border-slate-100">
 
@@ -2825,9 +4621,13 @@ export const UploadWorkflowView: React.FC = () => {
               }
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2"
             >
+
               Open Material Catalog
+
               <ArrowRight className="w-4 h-4" />
+
             </button>
+
 
             <button
               type="button"
@@ -2836,17 +4636,21 @@ export const UploadWorkflowView: React.FC = () => {
               }
               className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-4 py-2.5 rounded-xl text-xs"
             >
+
               Upload Another Dataset
+
             </button>
 
           </div>
 
         </motion.div>
+
       )}
 
     </div>
   );
 };
+
 
 /* =========================================================
    FALLBACK MAPPING
@@ -2855,8 +4659,10 @@ export const UploadWorkflowView: React.FC = () => {
 function createFallbackMappings(
   headers: string[]
 ): Mapping[] {
+
   return headers.map(
-    (header) => {
+    header => {
+
       const value =
         header
           .toLowerCase()
@@ -2864,6 +4670,7 @@ function createFallbackMappings(
             /[^a-z0-9]/g,
             ''
           );
+
 
       /* MATERIAL NUMBER */
 
@@ -2913,19 +4720,25 @@ function createFallbackMappings(
           'code'
         )
       ) {
+
         return {
+
           sourceColumn:
             header,
 
           targetColumn:
             'material_number',
 
-          confidence: 80,
+          confidence:
+            80,
 
           reason:
             'Column name resembles a material, SAP, item, part or code field.',
+
         };
+
       }
+
 
       /* DESCRIPTION */
 
@@ -2957,19 +4770,25 @@ function createFallbackMappings(
         value ===
           'name'
       ) {
+
         return {
+
           sourceColumn:
             header,
 
           targetColumn:
             'description',
 
-          confidence: 80,
+          confidence:
+            80,
 
           reason:
             'Column name resembles a material description or item text field.',
+
         };
+
       }
+
 
       /* SPECIFICATIONS */
 
@@ -2996,19 +4815,25 @@ function createFallbackMappings(
           'detail'
         )
       ) {
+
         return {
+
           sourceColumn:
             header,
 
           targetColumn:
             'specifications',
 
-          confidence: 80,
+          confidence:
+            80,
 
           reason:
             'Column name resembles a technical specification or detailed field.',
+
         };
+
       }
+
 
       /* CATEGORY */
 
@@ -3031,37 +4856,90 @@ function createFallbackMappings(
         value ===
           'group'
       ) {
+
         return {
+
           sourceColumn:
             header,
 
           targetColumn:
             'category',
 
-          confidence: 80,
+          confidence:
+            80,
 
           reason:
             'Column name resembles a material category, group or classification field.',
+
         };
+
       }
+
+
+      /* COMPANY */
+
+      if (
+        value ===
+          'company' ||
+        value ===
+          'companyname' ||
+        value.includes(
+          'company'
+        ) ||
+        value ===
+          'cpse' ||
+        value.includes(
+          'organization'
+        ) ||
+        value.includes(
+          'organisation'
+        ) ||
+        value.includes(
+          'enterprise'
+        )
+      ) {
+
+        return {
+
+          sourceColumn:
+            header,
+
+          targetColumn:
+            'unmapped',
+
+          confidence:
+            95,
+
+          reason:
+            'Company information is routing metadata and is handled separately from standard material fields.',
+
+        };
+
+      }
+
 
       /* UNMAPPED */
 
       return {
+
         sourceColumn:
           header,
 
         targetColumn:
           'unmapped',
 
-        confidence: 0,
+        confidence:
+          0,
 
         reason:
           'No reliable standard field was identified from the column name.',
+
       };
+
     }
   );
 }
+
 
 /* =========================================================
    NULLABLE CLEANER
@@ -3070,12 +4948,15 @@ function createFallbackMappings(
 function nullableClean(
   value: unknown
 ): string | null {
+
   if (
     value === null ||
     value === undefined
   ) {
+
     return null;
   }
+
 
   const text =
     String(value)
@@ -3084,6 +4965,7 @@ function nullableClean(
         ' '
       )
       .trim();
+
 
   if (
     !text ||
@@ -3096,11 +4978,14 @@ function nullableClean(
     text.toLowerCase() ===
       'none'
   ) {
+
     return null;
   }
 
+
   return text;
 }
+
 
 /* =========================================================
    STAT CARD
@@ -3119,7 +5004,9 @@ function StatCard({
   warning?: boolean;
   text?: boolean;
 }) {
+
   return (
+
     <div
       className={`rounded-xl border p-4 text-center ${
         danger
@@ -3134,6 +5021,7 @@ function StatCard({
         {title}
       </p>
 
+
       <p
         className={`mt-1 font-bold ${
           text
@@ -3147,10 +5035,12 @@ function StatCard({
             : 'text-slate-900'
         }`}
       >
+
         {typeof value ===
         'number'
           ? value.toLocaleString()
           : value}
+
       </p>
 
     </div>
