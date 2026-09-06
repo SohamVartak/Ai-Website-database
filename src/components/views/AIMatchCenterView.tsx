@@ -12,6 +12,7 @@ import {
   Trophy,
   Target,
   SlidersHorizontal,
+  Loader2,
 } from 'lucide-react';
 
 import { useApp } from '../../context/AppContext';
@@ -25,155 +26,16 @@ type MaterialRecord = {
   category?: string | null;
 };
 
-type MatchResult = {
-  material: MaterialRecord;
+type CompanyMatch = {
+  company: string;
+  material: MaterialRecord | null;
   score: number;
-  matchedTerms: string[];
-  numericMatches: string[];
   reason: string;
+  matchedFields: string[];
+  matchedSpecifications: string[];
 };
 
-const MATCH_THRESHOLD = 35;
-
-const STOP_WORDS = new Set([
-  'the',
-  'and',
-  'for',
-  'with',
-  'from',
-  'type',
-  'part',
-  'item',
-  'material',
-  'no',
-  'number',
-  'of',
-  'a',
-  'an',
-  'to',
-  'in',
-  'on',
-  'as',
-]);
-
-function normalizeText(value: unknown): string {
-  return String(value ?? '')
-    .toLowerCase()
-    .replace(/[^\w./%+-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function tokenize(value: string): string[] {
-  return Array.from(
-    new Set(
-      normalizeText(value)
-        .split(/\s+/)
-        .map((token) => token.trim())
-        .filter((token) => token.length >= 2 && !STOP_WORDS.has(token))
-    )
-  );
-}
-
-function extractNumbers(value: string): string[] {
-  const matches =
-    normalizeText(value).match(
-      /\b\d+(?:\.\d+)?(?:\s?[-/x]\s?\d+(?:\.\d+)?)?(?:[a-z]+)?\b/g
-    ) || [];
-
-  return Array.from(new Set(matches));
-}
-
-function calculateSimilarity(
-  query: string,
-  material: MaterialRecord
-): MatchResult {
-  const queryText = normalizeText(query);
-
-  const materialText = normalizeText(
-    [
-      material.material_number,
-      material.description,
-      material.specifications,
-      material.category,
-    ]
-      .filter(Boolean)
-      .join(' ')
-  );
-
-  const queryTokens = tokenize(queryText);
-  const materialTokens = new Set(tokenize(materialText));
-
-  const matchedTerms = queryTokens.filter((token) =>
-    materialTokens.has(token)
-  );
-
-  const queryNumbers = extractNumbers(queryText);
-  const materialNumbers = extractNumbers(materialText);
-
-  const numericMatches = queryNumbers.filter((number) =>
-    materialNumbers.includes(number)
-  );
-
-  const tokenScore =
-    queryTokens.length > 0
-      ? (matchedTerms.length / queryTokens.length) * 70
-      : 0;
-
-  const numericScore =
-    queryNumbers.length > 0
-      ? (numericMatches.length / queryNumbers.length) * 30
-      : 0;
-
-  let score = tokenScore + numericScore;
-
-  const description = normalizeText(material.description);
-  const specification = normalizeText(material.specifications);
-  const category = normalizeText(material.category);
-  const materialNumber = normalizeText(material.material_number);
-
-  const fullQuery = queryText;
-
-  if (description && fullQuery.includes(description)) {
-    score += 10;
-  }
-
-  if (specification && fullQuery.includes(specification)) {
-    score += 10;
-  }
-
-  if (category && fullQuery.includes(category)) {
-    score += 5;
-  }
-
-  if (
-    materialNumber &&
-    fullQuery.includes(materialNumber) &&
-    materialNumber.length >= 4
-  ) {
-    score += 15;
-  }
-
-  score = Math.min(Math.round(score), 100);
-
-  let reason = 'Weak similarity';
-
-  if (score >= 80) {
-    reason = 'Very strong match';
-  } else if (score >= 65) {
-    reason = 'Strong match';
-  } else if (score >= MATCH_THRESHOLD) {
-    reason = 'Potential match';
-  }
-
-  return {
-    material,
-    score,
-    matchedTerms,
-    numericMatches,
-    reason,
-  };
-}
+const DEFAULT_MIN_SCORE = 50;
 
 function getCompanyKey(company?: string | null): string {
   const value = String(company ?? '').trim().toUpperCase();
@@ -186,7 +48,20 @@ export default function AIMatchCenterView() {
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<string>('ALL');
-  const [minScore, setMinScore] = useState(MATCH_THRESHOLD);
+  const [minScore, setMinScore] = useState(DEFAULT_MIN_SCORE);
+
+  const [sourceCompany, setSourceCompany] =
+    useState<string>('');
+
+  const [matches, setMatches] = useState<CompanyMatch[]>([]);
+  const [overallBest, setOverallBest] =
+    useState<CompanyMatch | null>(null);
+
+  const [isMatching, setIsMatching] =
+    useState(false);
+
+  const [matchError, setMatchError] =
+    useState('');
 
   const companyCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -210,54 +85,126 @@ export default function AIMatchCenterView() {
       .sort();
   }, [companyCounts]);
 
-  const allMatches = useMemo(() => {
-    if (!submittedQuery.trim()) {
-      return [];
+  const displayedMatches = useMemo(() => {
+    return matches
+      .filter((match) => {
+        if (selectedCompany === 'ALL') {
+          return true;
+        }
+
+        return (
+          getCompanyKey(match.company) ===
+          selectedCompany
+        );
+      })
+      .filter(
+        (match) =>
+          match.material !== null &&
+          match.score >= minScore
+      )
+      .sort(
+        (a, b) =>
+          b.score - a.score
+      );
+  }, [
+    matches,
+    selectedCompany,
+    minScore,
+  ]);
+
+  const handleSearch = async () => {
+    const trimmedQuery = query.trim();
+
+    if (!trimmedQuery) {
+      return;
     }
 
-    return materials
-      .map((material) => calculateSimilarity(submittedQuery, material))
-      .filter((result) => result.score >= minScore)
-      .sort((a, b) => b.score - a.score);
-  }, [materials, submittedQuery, minScore]);
+    setSubmittedQuery(trimmedQuery);
+    setIsMatching(true);
+    setMatchError('');
+    setMatches([]);
+    setOverallBest(null);
 
-  const bestPerCompany = useMemo(() => {
-    const grouped = new Map<string, MatchResult>();
+    try {
+      const response = await fetch(
+        '/api/match-materials',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            query: trimmedQuery,
+            sourceCompany:
+              sourceCompany || null,
+            materials,
+          }),
+        }
+      );
 
-    allMatches.forEach((result) => {
-      const company = getCompanyKey(result.material.company);
+      const data = await response.json();
 
       if (
-        selectedCompany !== 'ALL' &&
-        company !== selectedCompany
+        !response.ok ||
+        !data?.success
       ) {
-        return;
+        throw new Error(
+          data?.error ||
+            'Material matching failed.'
+        );
       }
 
-      const existing = grouped.get(company);
+      const apiMatches: CompanyMatch[] =
+        Array.isArray(data.matches)
+          ? data.matches
+          : [];
 
-      if (!existing || result.score > existing.score) {
-        grouped.set(company, result);
+      const safeMatches =
+        apiMatches.filter(
+          (match) =>
+            match &&
+            typeof match.company ===
+              'string'
+        );
+
+      setMatches(
+        safeMatches
+      );
+
+      if (
+        data.overallBest &&
+        typeof data.overallBest ===
+          'object'
+      ) {
+        setOverallBest(
+          data.overallBest
+        );
+      } else {
+        setOverallBest(null);
       }
-    });
+    } catch (error) {
+      console.error(
+        'Material matching error:',
+        error
+      );
 
-    return Array.from(grouped.entries())
-      .map(([company, result]) => ({
-        company,
-        ...result,
-      }))
-      .sort((a, b) => b.score - a.score);
-  }, [allMatches, selectedCompany]);
-
-  const overallBest = bestPerCompany[0] || null;
-
-  const handleSearch = () => {
-    setSubmittedQuery(query.trim());
+      setMatchError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to find material matches.'
+      );
+    } finally {
+      setIsMatching(false);
+    }
   };
 
   const clearSearch = () => {
     setQuery('');
     setSubmittedQuery('');
+    setMatches([]);
+    setOverallBest(null);
+    setMatchError('');
   };
 
   if (materialsLoading) {
@@ -291,55 +238,65 @@ export default function AIMatchCenterView() {
         </h1>
 
         <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600">
-          Enter a part name and its specifications. The system searches the
-          complete material database and returns at most one strong candidate
-          from each company.
+          Enter a part name and its specifications.
+          The AI searches the available material records
+          and returns at most one strong candidate from
+          each company.
         </p>
       </div>
 
       {/* DATABASE SUMMARY */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <SummaryCard
-          icon={<Database className="h-5 w-5" />}
+          icon={
+            <Database className="h-5 w-5" />
+          }
           label="Total Materials"
           value={materials.length}
         />
 
         <SummaryCard
-          icon={<Building2 className="h-5 w-5" />}
+          icon={
+            <Building2 className="h-5 w-5" />
+          }
           label="Companies"
           value={companies.length}
         />
 
         <SummaryCard
-          icon={<Target className="h-5 w-5" />}
+          icon={
+            <Target className="h-5 w-5" />
+          }
           label="Minimum Match"
           value={`${minScore}%`}
         />
 
         <SummaryCard
-          icon={<Trophy className="h-5 w-5" />}
+          icon={
+            <Trophy className="h-5 w-5" />
+          }
           label="Companies Matched"
-          value={bestPerCompany.length}
+          value={
+            displayedMatches.length
+          }
         />
       </div>
 
-      {/* SEARCH BOX */}
+      {/* SEARCH */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-start gap-3">
           <div className="rounded-lg bg-indigo-100 p-2">
-            <Search className="h-5 w-5 text-indigo-600" />
+            <Sparkles className="h-5 w-5 text-indigo-600" />
           </div>
 
           <div>
             <h2 className="font-semibold text-slate-900">
-              Search Part + Specification
+              AI Material Search
             </h2>
 
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              Example: enter the material description together with ratings,
-              sizes, voltage, pressure, current, model, or other technical
-              information.
+              Describe the part and include as many technical
+              specifications as you know.
             </p>
           </div>
         </div>
@@ -351,10 +308,15 @@ export default function AIMatchCenterView() {
             <input
               type="text"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) =>
+                setQuery(event.target.value)
+              }
               onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  handleSearch();
+                if (
+                  event.key ===
+                  'Enter'
+                ) {
+                  void handleSearch();
                 }
               }}
               placeholder="Example: fuse 32 amps 500V HRC"
@@ -364,19 +326,34 @@ export default function AIMatchCenterView() {
 
           <button
             type="button"
-            onClick={handleSearch}
-            disabled={!query.trim()}
+            onClick={() => {
+              void handleSearch();
+            }}
+            disabled={
+              !query.trim() ||
+              isMatching
+            }
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Search className="h-4 w-4" />
-            Find Matches
+            {isMatching ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                AI Matching...
+              </>
+            ) : (
+              <>
+                <Search className="h-4 w-4" />
+                Find Matches
+              </>
+            )}
           </button>
 
           {submittedQuery && (
             <button
               type="button"
               onClick={clearSearch}
-              className="rounded-lg border border-slate-200 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              disabled={isMatching}
+              className="rounded-lg border border-slate-200 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
             >
               Clear
             </button>
@@ -384,31 +361,91 @@ export default function AIMatchCenterView() {
         </div>
 
         {/* FILTERS */}
-        <div className="mt-5 grid gap-4 border-t border-slate-100 pt-5 md:grid-cols-2">
+        <div className="mt-5 grid gap-4 border-t border-slate-100 pt-5 md:grid-cols-3">
+          {/* SOURCE COMPANY */}
           <div>
             <div className="mb-2 flex items-center gap-2">
               <Building2 className="h-4 w-4 text-slate-400" />
 
               <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Company Filter
+                Source Company
+              </label>
+            </div>
+
+            <select
+              value={sourceCompany}
+              onChange={(event) =>
+                setSourceCompany(
+                  event.target.value
+                )
+              }
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
+            >
+              <option value="">
+                No source company
+              </option>
+
+              {companies.map(
+                (company) => (
+                  <option
+                    key={company}
+                    value={company}
+                  >
+                    {company}
+                  </option>
+                )
+              )}
+            </select>
+
+            <p className="mt-1 text-xs text-slate-400">
+              Selected source company will be
+              excluded from matching.
+            </p>
+          </div>
+
+          {/* RESULT COMPANY FILTER */}
+          <div>
+            <div className="mb-2 flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-slate-400" />
+
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Results From
               </label>
             </div>
 
             <select
               value={selectedCompany}
-              onChange={(event) => setSelectedCompany(event.target.value)}
+              onChange={(event) =>
+                setSelectedCompany(
+                  event.target.value
+                )
+              }
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
             >
-              <option value="ALL">All Companies</option>
+              <option value="ALL">
+                All Companies
+              </option>
 
-              {companies.map((company) => (
-                <option key={company} value={company}>
-                  {company} ({companyCounts[company]})
-                </option>
-              ))}
+              {companies.map(
+                (company) => (
+                  <option
+                    key={company}
+                    value={company}
+                  >
+                    {company} (
+                    {
+                      companyCounts[
+                        company
+                      ]
+                    }
+                    )
+                  </option>
+                )
+              )}
             </select>
           </div>
 
+          {/* SCORE */}
           <div>
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -427,16 +464,41 @@ export default function AIMatchCenterView() {
             <input
               type="range"
               min="20"
-              max="80"
+              max="90"
               value={minScore}
-              onChange={(event) => setMinScore(Number(event.target.value))}
+              onChange={(event) =>
+                setMinScore(
+                  Number(
+                    event.target.value
+                  )
+                )
+              }
               className="w-full"
             />
           </div>
         </div>
       </div>
 
-      {/* NO SEARCH YET */}
+      {/* MATCHING ERROR */}
+      {matchError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+
+            <div>
+              <h2 className="font-semibold text-red-800">
+                AI matching failed
+              </h2>
+
+              <p className="mt-1 text-sm text-red-700">
+                {matchError}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NO SEARCH */}
       {!submittedQuery && (
         <>
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
@@ -447,13 +509,14 @@ export default function AIMatchCenterView() {
             </h2>
 
             <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
-              Type the part description and as many technical specifications
-              as you know. The system will search the entire database and
-              select the best available result from each company.
+              Example:
+              <br />
+              <span className="font-medium text-slate-700">
+                fuse 32 amps 500V HRC
+              </span>
             </p>
           </div>
 
-          {/* COMPANY DATA */}
           <div>
             <div className="mb-4">
               <h2 className="text-xl font-bold text-slate-900">
@@ -461,32 +524,38 @@ export default function AIMatchCenterView() {
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                Material records currently loaded from Supabase.
+                Material records currently loaded from
+                Supabase.
               </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {companies.map((company) => (
-                <CompanyDataCard
-                  key={company}
-                  company={company}
-                  count={companyCounts[company]}
-                />
-              ))}
+              {companies.map(
+                (company) => (
+                  <CompanyDataCard
+                    key={company}
+                    company={company}
+                    count={
+                      companyCounts[
+                        company
+                      ]
+                    }
+                  />
+                )
+              )}
             </div>
           </div>
         </>
       )}
 
-      {/* SEARCHED RESULTS */}
-      {submittedQuery && (
+      {/* SEARCH RESULTS */}
+      {submittedQuery && !isMatching && (
         <>
-          {/* QUERY SUMMARY */}
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">
-                  Search Query
+                  AI Search Query
                 </p>
 
                 <p className="mt-1 text-lg font-bold text-slate-900">
@@ -494,63 +563,95 @@ export default function AIMatchCenterView() {
                 </p>
 
                 <p className="mt-1 text-sm text-slate-600">
-                  Showing one best candidate per company with a score of{' '}
-                  <strong>{minScore}%</strong> or higher.
+                  Showing at most one qualifying result from
+                  each company.
+                  {sourceCompany && (
+                    <>
+                      {' '}
+                      {sourceCompany} is excluded as the
+                      source company.
+                    </>
+                  )}
                 </p>
               </div>
 
               <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3 text-center">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Matching Companies
+                  Qualifying Companies
                 </p>
 
                 <p className="text-2xl font-bold text-indigo-700">
-                  {bestPerCompany.length}
+                  {
+                    displayedMatches.length
+                  }
                 </p>
               </div>
             </div>
           </div>
 
           {/* OVERALL BEST */}
-          {overallBest && (
-            <div className="rounded-xl border-2 border-green-200 bg-green-50 p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-green-100 p-2">
-                    <Trophy className="h-6 w-6 text-green-700" />
+          {overallBest &&
+            overallBest.material &&
+            overallBest.score >=
+              minScore && (
+              <div className="rounded-xl border-2 border-green-200 bg-green-50 p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-green-100 p-2">
+                      <Trophy className="h-6 w-6 text-green-700" />
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wide text-green-700">
+                        Overall Closest Match
+                      </p>
+
+                      <h2 className="mt-1 text-xl font-bold text-slate-900">
+                        {
+                          overallBest.company
+                        }
+                      </h2>
+
+                      <p className="mt-1 text-sm text-slate-600">
+                        {overallBest
+                          .material
+                          .description ||
+                          'No description available'}
+                      </p>
+
+                      {overallBest
+                        .material
+                        .material_number && (
+                        <p className="mt-1 font-mono text-xs text-slate-500">
+                          {
+                            overallBest
+                              .material
+                              .material_number
+                          }
+                        </p>
+                      )}
+                    </div>
                   </div>
 
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-green-700">
-                      Overall Closest Match
+                  <div className="text-left lg:text-right">
+                    <p className="text-4xl font-bold text-green-700">
+                      {
+                        overallBest.score
+                      }
+                      %
                     </p>
 
-                    <h2 className="mt-1 text-xl font-bold text-slate-900">
-                      {overallBest.company}
-                    </h2>
-
-                    <p className="mt-1 text-sm text-slate-600">
-                      {overallBest.material.description ||
-                        'No description available'}
+                    <p className="text-xs font-medium text-slate-500">
+                      highest AI similarity
                     </p>
                   </div>
-                </div>
-
-                <div className="text-left lg:text-right">
-                  <p className="text-4xl font-bold text-green-700">
-                    {overallBest.score}%
-                  </p>
-
-                  <p className="text-xs font-medium text-slate-500">
-                    highest available similarity
-                  </p>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* NO MATCH */}
-          {bestPerCompany.length === 0 && (
+          {/* NO QUALIFYING RESULT */}
+          {displayedMatches.length ===
+            0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center">
               <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-500" />
 
@@ -559,15 +660,17 @@ export default function AIMatchCenterView() {
               </h2>
 
               <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-600">
-                The database contains records, but none reached the current
-                minimum score of {minScore}%. Try adding more specifications
-                or lowering the minimum score.
+                No company result reached the current
+                minimum score of {minScore}%.
+                Try adding more technical specifications or
+                lowering the threshold.
               </p>
             </div>
           )}
 
           {/* COMPANY RESULTS */}
-          {bestPerCompany.length > 0 && (
+          {displayedMatches.length >
+            0 && (
             <div>
               <div className="mb-4">
                 <h2 className="text-xl font-bold text-slate-900">
@@ -575,48 +678,44 @@ export default function AIMatchCenterView() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Only the single highest-scoring material from each company is
-                  displayed.
+                  Only the highest-scoring qualifying material
+                  from each company is shown.
                 </p>
               </div>
 
               <div className="grid gap-5 lg:grid-cols-2">
-                {bestPerCompany.map((result, index) => (
-                  <MatchCard
-                    key={`${result.company}-${result.material.id}`}
-                    rank={index + 1}
-                    result={result}
-                    overallBest={
-                      overallBest?.material.id === result.material.id
-                    }
-                  />
-                ))}
+                {displayedMatches.map(
+                  (result, index) => (
+                    <MatchCard
+                      key={`${result.company}-${result.material?.id ?? index}`}
+                      rank={index + 1}
+                      result={result}
+                      overallBest={
+                        overallBest?.material?.id ===
+                        result.material?.id
+                      }
+                    />
+                  )
+                )}
               </div>
             </div>
           )}
 
-          {/* MATCHING LOGIC */}
+          {/* GOVERNANCE */}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
             <div className="flex gap-3">
-              <Target className="mt-0.5 h-5 w-5 shrink-0 text-slate-600" />
+              <ShieldIcon />
 
               <div>
                 <h3 className="font-semibold text-slate-800">
-                  How the current matching works
+                  AI Matching Governance
                 </h3>
 
                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                  The matcher compares the entered query against material
-                  number, description, specifications and category. Technical
-                  numbers such as voltage, current, pressure and dimensions
-                  receive additional weight when they match exactly. Weak
-                  results below the selected threshold are excluded.
-                </p>
-
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  This result is decision support. It does not claim that two
-                  materials are technically interchangeable without engineering
-                  verification.
+                  AI similarity is decision support. A high score does not
+                  prove that two materials are technically interchangeable.
+                  Engineering review is required before using a match for
+                  procurement or substitution.
                 </p>
               </div>
             </div>
@@ -653,7 +752,9 @@ function SummaryCard({
       </p>
 
       <p className="mt-1 text-2xl font-bold text-slate-900">
-        {typeof value === 'number' ? value.toLocaleString() : value}
+        {typeof value === 'number'
+          ? value.toLocaleString()
+          : value}
       </p>
     </div>
   );
@@ -680,13 +781,17 @@ function CompanyDataCard({
         </span>
       </div>
 
-      <p className="text-sm font-semibold text-slate-900">{company}</p>
+      <p className="text-sm font-semibold text-slate-900">
+        {company}
+      </p>
 
       <p className="mt-1 text-2xl font-bold text-slate-900">
         {count.toLocaleString()}
       </p>
 
-      <p className="text-xs text-slate-500">material records</p>
+      <p className="text-xs text-slate-500">
+        material records
+      </p>
     </div>
   );
 }
@@ -701,9 +806,13 @@ function MatchCard({
   overallBest,
 }: {
   rank: number;
-  result: MatchResult & { company: string };
+  result: CompanyMatch;
   overallBest: boolean;
 }) {
+  if (!result.material) {
+    return null;
+  }
+
   const scoreClass =
     result.score >= 80
       ? 'text-green-700'
@@ -751,7 +860,9 @@ function MatchCard({
               {result.score}%
             </p>
 
-            <p className="text-xs text-slate-400">match score</p>
+            <p className="text-xs text-slate-400">
+              AI similarity
+            </p>
           </div>
         </div>
 
@@ -759,7 +870,10 @@ function MatchCard({
           <div
             className={`h-full rounded-full transition-all ${barClass}`}
             style={{
-              width: `${Math.min(result.score, 100)}%`,
+              width: `${Math.min(
+                result.score,
+                100
+              )}%`,
             }}
           />
         </div>
@@ -767,74 +881,104 @@ function MatchCard({
 
       <div className="space-y-4 p-4">
         <DetailRow
-          icon={<Tag className="h-4 w-4" />}
+          icon={
+            <Tag className="h-4 w-4" />
+          }
           label="Material Number"
-          value={result.material.material_number || 'N/A'}
+          value={
+            result.material
+              .material_number ||
+            'N/A'
+          }
         />
 
         <DetailRow
-          icon={<FileText className="h-4 w-4" />}
+          icon={
+            <FileText className="h-4 w-4" />
+          }
           label="Description"
-          value={result.material.description || 'N/A'}
+          value={
+            result.material
+              .description ||
+            'N/A'
+          }
         />
 
         <DetailRow
-          icon={<SlidersHorizontal className="h-4 w-4" />}
+          icon={
+            <SlidersHorizontal className="h-4 w-4" />
+          }
           label="Specifications"
-          value={result.material.specifications || 'N/A'}
+          value={
+            result.material
+              .specifications ||
+            'N/A'
+          }
         />
 
         <DetailRow
-          icon={<Tag className="h-4 w-4" />}
+          icon={
+            <Tag className="h-4 w-4" />
+          }
           label="Category"
-          value={result.material.category || 'N/A'}
+          value={
+            result.material
+              .category ||
+            'N/A'
+          }
         />
 
-        {/* MATCHED TERMS */}
+        {/* MATCHED FIELDS */}
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Matched Terms
+            Matched Fields
           </p>
 
-          {result.matchedTerms.length > 0 ? (
+          {result.matchedFields.length >
+          0 ? (
             <div className="flex flex-wrap gap-2">
-              {result.matchedTerms.map((term) => (
-                <span
-                  key={term}
-                  className="rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700"
-                >
-                  {term}
-                </span>
-              ))}
+              {result.matchedFields.map(
+                (field) => (
+                  <span
+                    key={field}
+                    className="rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700"
+                  >
+                    {field}
+                  </span>
+                )
+              )}
             </div>
           ) : (
             <p className="text-xs text-slate-500">
-              No exact text terms matched.
+              No strong field matches returned.
             </p>
           )}
         </div>
 
-        {/* NUMERIC MATCHES */}
-        {result.numericMatches.length > 0 && (
+        {/* TECHNICAL MATCHES */}
+        {result.matchedSpecifications
+          .length > 0 && (
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Matching Technical Values
             </p>
 
             <div className="flex flex-wrap gap-2">
-              {result.numericMatches.map((value) => (
-                <span
-                  key={value}
-                  className="rounded-md bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700"
-                >
-                  {value}
-                </span>
-              ))}
+              {result.matchedSpecifications.map(
+                (value) => (
+                  <span
+                    key={value}
+                    className="rounded-md bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700"
+                  >
+                    {value}
+                  </span>
+                )
+              )}
             </div>
           </div>
         )}
 
-        {/* RESULT STATUS */}
+        {/* REASON */}
         <div
           className={`rounded-lg border p-3 ${
             overallBest
@@ -852,13 +996,14 @@ function MatchCard({
             )}
 
             <p className="text-sm font-semibold text-slate-800">
-              {overallBest ? 'Overall Closest Match' : result.reason}
+              {overallBest
+                ? 'Overall Closest Match'
+                : 'Qualifying AI Match'}
             </p>
           </div>
 
-          <p className="mt-1 text-xs text-slate-500">
-            One result is shown for this company because it has the highest
-            qualifying score.
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            {result.reason}
           </p>
         </div>
       </div>
@@ -892,6 +1037,18 @@ function DetailRow({
       <p className="break-words text-sm leading-6 text-slate-700">
         {value}
       </p>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* SHIELD ICON                                                                */
+/* -------------------------------------------------------------------------- */
+
+function ShieldIcon() {
+  return (
+    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600">
+      ✓
     </div>
   );
 }
