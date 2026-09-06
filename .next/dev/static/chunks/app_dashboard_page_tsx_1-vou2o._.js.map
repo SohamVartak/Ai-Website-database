@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/soham/ai-website-database/app/dashboard/page.tsx"],"sourcesContent":["\"use client\";\r\n\r\nimport { App } from \"@/src/App\";\r\nimport { AppProvider } from \"@/src/context/AppContext\";\r\n\r\nexport default function DashboardPage() {\r\n  return (\r\n    <AppProvider>\r\n      <App />\r\n    </AppProvider>\r\n  );\r\n}"],"names":["DashboardPage"],"mappings":";;;;;AAEA;AACA;AAHA;;;;AAKe,SAASA;IACtB,qBACE,6LAAC,+IAAW;kBACV,cAAA,6LAAC,qHAAG;;;;;;;;;;AAGV;KANwBA"}}]
-}
